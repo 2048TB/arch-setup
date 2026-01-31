@@ -1,0 +1,168 @@
+# Yazi 文件管理器配置
+# 配置位置: ~/.config/yazi/yazi.toml
+# Yazi - 快速的终端文件管理器
+
+[mgr]
+# 布局
+layout         = [1, 4, 3]  # 侧边栏:主窗口:预览 比例
+sort_by        = "natural"  # 排序方式: natural, alphabetical, created, modified, size
+sort_sensitive = false      # 大小写敏感
+sort_reverse   = false      # 反向排序
+sort_dir_first = true       # 目录优先
+linemode       = "size"     # 行模式: none, size, permissions, mtime
+show_hidden    = false      # 显示隐藏文件
+show_symlink   = true       # 显示符号链接
+
+[preview]
+# 预览设置
+tab_size        = 4        # Tab 宽度
+max_width       = 600      # 最大宽度
+max_height      = 900      # 最大高度
+cache_dir       = ""       # 缓存目录（空为默认）
+image_filter    = "triangle" # 图片过滤器
+image_quality   = 85       # 图片质量（高分辨率显示器优化）
+
+[opener]
+# 文件打开器
+edit = [
+    { run = 'nvim "$@"', block = true, for = "unix" },
+]
+
+open = [
+    { run = 'xdg-open "$@"', desc = "Open", for = "linux" },
+]
+
+# 文本文件
+text = [
+    { run = 'nvim "$@"', block = true },
+]
+
+# 图片文件
+image = [
+    { run = 'imv "$@"', orphan = true, desc = "Open with imv" },
+]
+
+# 视频文件
+video = [
+    { run = 'mpv "$@"', orphan = true, desc = "Play with mpv" },
+]
+
+# PDF 文件
+pdf = [
+    { run = 'zathura "$@"', orphan = true, desc = "Open with zathura" },
+]
+
+# 归档文件
+archive = [
+    { run = 'file-roller "$@"', orphan = true, desc = "Extract with file-roller" },
+]
+
+# Markdown 文件
+markdown = [
+    { run = 'nvim "$@"', block = true, desc = "Edit with Neovim" },
+]
+
+# 代码文件
+code = [
+    { run = 'nvim "$@"', block = true, desc = "Edit with Neovim" },
+]
+
+# Office 文档（使用系统默认）
+office = [
+    { run = 'xdg-open "$@"', orphan = true, desc = "Open with default application" },
+]
+
+[open]
+# 文件类型关联
+rules = [
+    # 纯文本文件
+    { name = "*.txt", use = "text" },
+    { name = "*.csv", use = "text" },
+    { name = "*.log", use = "text" },
+    { name = "*.conf", use = "text" },
+    { name = "*.ini", use = "text" },
+
+    # Markdown
+    { name = "*.md", use = "markdown" },
+    { name = "*.markdown", use = "markdown" },
+
+    # 代码文件
+    { name = "*.rs", use = "code" },
+    { name = "*.go", use = "code" },
+    { name = "*.py", use = "code" },
+    { name = "*.js", use = "code" },
+    { name = "*.ts", use = "code" },
+    { name = "*.jsx", use = "code" },
+    { name = "*.tsx", use = "code" },
+    { name = "*.c", use = "code" },
+    { name = "*.cpp", use = "code" },
+    { name = "*.h", use = "code" },
+    { name = "*.hpp", use = "code" },
+    { name = "*.sh", use = "code" },
+    { name = "*.bash", use = "code" },
+    { name = "*.zsh", use = "code" },
+    { name = "*.lua", use = "code" },
+    { name = "*.vim", use = "code" },
+
+    # Office 文档
+    { name = "*.docx", use = "office" },
+    { name = "*.xlsx", use = "office" },
+    { name = "*.pptx", use = "office" },
+    { name = "*.doc", use = "office" },
+    { name = "*.xls", use = "office" },
+    { name = "*.ppt", use = "office" },
+    { name = "*.odt", use = "office" },
+    { name = "*.ods", use = "office" },
+    { name = "*.odp", use = "office" },
+
+    # 文本文件
+    { mime = "text/*", use = "text" },
+    { mime = "application/json", use = "text" },
+    { mime = "application/xml", use = "text" },
+    { mime = "application/javascript", use = "text" },
+
+    # 图片
+    { mime = "image/*", use = "image" },
+
+    # 视频
+    { mime = "video/*", use = "video" },
+
+    # 音频
+    { mime = "audio/*", use = "video" },  # 用 mpv 播放音频
+
+    # PDF
+    { mime = "application/pdf", use = "pdf" },
+
+    # 归档
+    { mime = "application/zip", use = "archive" },
+    { mime = "application/x-tar", use = "archive" },
+    { mime = "application/x-bzip2", use = "archive" },
+    { mime = "application/x-7z-compressed", use = "archive" },
+    { mime = "application/x-rar", use = "archive" },
+
+    # 其他使用默认打开方式
+    { mime = "*", use = "open" },
+]
+
+[tasks]
+# 任务设置
+micro_workers    = 5       # 微任务工作线程数
+macro_workers    = 10      # 宏任务工作线程数
+bizarre_retry    = 5       # 重试次数
+suppress_preload = false   # 抑制预加载
+
+[plugin]
+# 插件设置
+preloaders = [
+    { mime = "image/*", run = "image" },
+    { mime = "video/*", run = "video" },
+    { mime = "application/pdf", run = "pdf" },
+]
+
+[log]
+# 日志设置
+enabled = false
+
+[theme]
+# 不在此文件配置主题，使用单独的 theme.toml
+

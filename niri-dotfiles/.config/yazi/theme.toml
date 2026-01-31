@@ -1,0 +1,187 @@
+# Yazi 主题配置 - Catppuccin Mocha
+# 配置位置: ~/.config/yazi/theme.toml
+
+# ===== 状态栏 =====
+[status]
+separator_open = ""
+separator_close = ""
+
+# 正常模式
+[status.mode_normal]
+fg = "#1e1e2e"
+bg = "#89b4fa"
+bold = true
+
+# 选择模式
+[status.mode_select]
+fg = "#1e1e2e"
+bg = "#a6e3a1"
+bold = true
+
+# 未保存模式
+[status.mode_unset]
+fg = "#1e1e2e"
+bg = "#f38ba8"
+bold = true
+
+# 进度条
+[status.progress]
+fg = "#89b4fa"
+bg = "#313244"
+
+# 权限
+[status.permissions_t]
+fg = "#a6e3a1"
+[status.permissions_r]
+fg = "#f9e2af"
+[status.permissions_w]
+fg = "#f38ba8"
+[status.permissions_x]
+fg = "#89b4fa"
+[status.permissions_s]
+fg = "#74c7ec"
+
+# ===== 选择器 =====
+[select]
+border = { fg = "#89b4fa" }
+active = { fg = "#1e1e2e", bg = "#89b4fa" }
+inactive = { fg = "#cdd6f4" }
+
+# ===== 输入框 =====
+[input]
+border = { fg = "#89b4fa" }
+title = { fg = "#cdd6f4" }
+value = { fg = "#cdd6f4" }
+selected = { reversed = true }
+
+# ===== 补全 =====
+[completion]
+border = { fg = "#89b4fa" }
+active = { fg = "#1e1e2e", bg = "#89b4fa" }
+inactive = { fg = "#cdd6f4" }
+
+# 图标
+[completion.icon_file]
+fg = "#cdd6f4"
+[completion.icon_folder]
+fg = "#89b4fa"
+
+# ===== 任务 =====
+[tasks]
+border = { fg = "#89b4fa" }
+title = { fg = "#cdd6f4" }
+hovered = { fg = "#1e1e2e", bg = "#89b4fa" }
+
+# ===== 管理器 =====
+[mgr]
+cwd = { fg = "#89b4fa", bold = true }
+
+# 悬停状态
+hovered = { fg = "#1e1e2e", bg = "#89b4fa" }
+preview_hovered = { underline = true }
+
+# 查找
+find_keyword = { fg = "#f9e2af", bold = true }
+find_position = { fg = "#f38ba8", bg = "#313244", bold = true }
+
+# 标记
+marker_selected = { fg = "#a6e3a1", bg = "#a6e3a1" }
+marker_copied = { fg = "#f9e2af", bg = "#f9e2af" }
+marker_cut = { fg = "#f38ba8", bg = "#f38ba8" }
+
+# 选项卡
+tab_active = { fg = "#1e1e2e", bg = "#89b4fa", bold = true }
+tab_inactive = { fg = "#cdd6f4", bg = "#313244" }
+tab_width = 1
+
+# 边框
+border_symbol = "│"
+border_style = { fg = "#585b70" }
+
+# ===== 文件类型样式 =====
+[filetype]
+
+# 文件规则
+rules = [
+    # 文档
+    { mime = "text/*", fg = "#cdd6f4" },
+    { mime = "application/json", fg = "#f9e2af" },
+    { mime = "application/x-yaml", fg = "#f9e2af" },
+    { mime = "application/toml", fg = "#f9e2af" },
+
+    # 图片
+    { mime = "image/*", fg = "#89b4fa" },
+
+    # 视频
+    { mime = "video/*", fg = "#cba6f7" },
+
+    # 音频
+    { mime = "audio/*", fg = "#94e2d5" },
+
+    # 压缩包
+    { mime = "application/zip", fg = "#f38ba8" },
+    { mime = "application/gzip", fg = "#f38ba8" },
+    { mime = "application/x-tar", fg = "#f38ba8" },
+    { mime = "application/x-bzip2", fg = "#f38ba8" },
+    { mime = "application/x-7z-compressed", fg = "#f38ba8" },
+    { mime = "application/x-rar", fg = "#f38ba8" },
+
+    # 可执行文件
+    { mime = "application/x-executable", fg = "#a6e3a1" },
+    { mime = "application/x-sharedlib", fg = "#a6e3a1" },
+
+    # 特殊文件
+    { name = "*", is = "orphan", fg = "#f38ba8" },
+    { name = "*", is = "exec", fg = "#a6e3a1" },
+    { name = "*/", fg = "#89b4fa" },
+]
+
+# ===== 图标 =====
+[icons]
+# 使用 Nerd Fonts 图标
+"Desktop/"     = ""
+"Documents/"   = ""
+"Downloads/"   = ""
+"Pictures/"    = ""
+"Music/"       = ""
+"Videos/"      = ""
+"Public/"      = ""
+"Library/"     = ""
+"Development/" = ""
+
+".git/"        = ""
+".github/"     = ""
+".config/"     = ""
+
+# 文件类型图标
+"*.rs"         = ""
+"*.go"         = ""
+"*.py"         = ""
+"*.js"         = ""
+"*.ts"         = ""
+"*.jsx"        = ""
+"*.tsx"        = ""
+"*.vue"        = ""
+"*.html"       = ""
+"*.css"        = ""
+"*.scss"       = ""
+"*.json"       = ""
+"*.toml"       = ""
+"*.yaml"       = ""
+"*.yml"        = ""
+"*.md"         = ""
+"*.txt"        = ""
+"*.pdf"        = ""
+"*.zip"        = ""
+"*.tar"        = ""
+"*.gz"         = ""
+"*.jpg"        = ""
+"*.jpeg"       = ""
+"*.png"        = ""
+"*.gif"        = ""
+"*.svg"        = ""
+"*.mp4"        = ""
+"*.mp3"        = ""
+"Makefile"     = ""
+"Dockerfile"   = ""
+"README.md"    = ""

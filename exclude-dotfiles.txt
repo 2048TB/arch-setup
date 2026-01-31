@@ -1,0 +1,8 @@
+lsfg-vk
+mango
+ghostty
+swaylock
+swaync
+ulauncher
+wofi
+niriswitcher

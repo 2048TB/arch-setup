@@ -1,0 +1,321 @@
+#!/bin/bash
+
+# ==============================================================================
+# Shorin-Niri Updater (Non-Blocking Dependency Check)
+# ==============================================================================
+
+set -o pipefail
+
+# --- 1. Pre-Configuration (Language) ---
+ORIGINAL_LANG="${LC_ALL:-${LC_MESSAGES:-${LANG}}}"
+SHOW_HELP=false
+
+if [[ "$ORIGINAL_LANG" == *"zh_CN"* ]]; then
+    UI_LANG="zh"
+else
+    UI_LANG="en"
+fi
+
+# Force C locale for git/find consistency
+export LC_ALL=C
+
+# --- 2. Configuration ---
+DOTFILES_REPO="$HOME/.local/share/shorin-niri"
+BACKUP_ROOT="$HOME/.cache/shorin-niri-update"
+BACKUP_FILE="$BACKUP_ROOT/backup.tar.gz"
+TARGET_DIRS=("dotfiles" "wallpapers") 
+BRANCH="main"
+
+# [CONFIG] 远程依赖清单 URL
+APP_LIST_URL="https://raw.githubusercontent.com/SHORiN-KiWATA/shorin-arch-setup/refs/heads/main/niri-applist.txt"
+
+# --- 3. Styles ---
+H_RED='\033[1;31m'; H_GREEN='\033[1;32m'; H_YELLOW='\033[1;33m'; H_BLUE='\033[1;34m'; NC='\033[0m'
+
+# --- 4. Localization Table ---
+LANG_TABLE='
+MSG_DESC          | Update Shorin-Niri dotfiles and manage configurations.      | 更新 Shorin-Niri 配置文件并管理系统配置。
+MSG_FEAT_HEAD     | Features:                                                  | 功能特性：
+MSG_FEAT_1        | - Safe Update: Git fetch, stash changes, and rebase        | - 安全更新：Git 拉取、暂存本地修改并变基
+MSG_FEAT_2        | - Backup: Optional tarball backup before update            | - 备份机制：更新前可选创建压缩包备份
+MSG_FEAT_3        | - Auto Link: Smart recursive symlinking                    | - 自动链接：智能递归软链接管理
+MSG_FEAT_4        | - Dependency: Fetch list from GitHub & Auto Install        | - 依赖管理：从 GitHub 获取清单并自动安装
+MSG_ASK_BACKUP    | [QUERY] Create a backup of current state? [Y/n]:           | [询问] 是否创建当前状态的备份? [Y/n]: 
+MSG_BACKUP_ING    | Creating backup...                                         | 正在创建备份...
+MSG_QUICKSAVE     | Qucik snapper saving...                                    | 正在快速快照存档...
+MSG_BACKUP_DONE   | Backup completed.                                          | 备份完成
+MSG_BACKUP_SKIP   | Backup skipped.                                            | 已跳过备份
+MSG_CHECK_UPDATE  | Checking for updates...                                    | 检查更新...
+MSG_UP_TO_DATE    | Already up to date.                                        | 已是最新版本
+MSG_LOCAL_CHANGE  | Local changes detected, stashing...                        | 检测到本地修改，准备合并...
+MSG_PULLING       | Downloading and merging...                                 | 正在下载并合并...
+MSG_CORE_OK       | Core update successful.                                    | 核心更新成功
+MSG_CONFLICT      | Update conflict. Aborted and rolled back.                  | 更新冲突，已还原，请手动检查。
+MSG_RESTORE       | Restoring local changes...                                 | 恢复本地修改...
+MSG_RESTORE_OK    | Local changes restored.                                    | 本地修改已恢复
+MSG_LINKING       | Refreshing config links...                                 | 刷新配置链接...
+MSG_CLEANING      | Cleaning up repository...                                  | 清理仓库...
+MSG_ALL_DONE      | Update Completed.                                          | 更新完成
+MSG_BACKUP_PATH   | Backup Path:                                               | 备份路径:
+MSG_ERR_REPO      | Repository not found:                                      | 未找到仓库:
+MSG_ERR_COMMIT    | Failed to create temp commit.                              | 无法创建临时提交
+MSG_FETCH_LIST    | Downloading dependency list from GitHub...                 | 正在从 GitHub 下载依赖清单...
+MSG_FETCH_FAIL    | Failed to download dependency list. Skipping.              | 无法下载依赖清单，跳过依赖检查。
+MSG_INSTALL_DEPS  | Installing missing packages:                               | 正在安装缺失的软件包:
+MSG_INSTALL_FAIL  | Installation failed. Please check dependencies manually.   | 自动安装失败，请稍后手动检查依赖。
+MSG_DEPS_OK       | All dependencies are satisfied.                            | 所有依赖已满足。
+'
+
+while IFS='|' read -r v e c; do
+    v=$(printf '%s' "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    e=$(printf '%s' "$e" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    c=$(printf '%s' "$c" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    
+    [ -z "$v" ] && continue
+    case "$v" in \#*) continue ;; esac
+    
+    if [ "$UI_LANG" = "zh" ]; then
+        eval "$v=\"$c\""
+    else
+        eval "$v=\"$e\""
+    fi
+done <<EOF
+$LANG_TABLE
+EOF
+
+# --- 5. Helper Functions ---
+log() { echo -e "${H_BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${H_GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${H_YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${H_RED}[ERROR]${NC} $1"; exit 1; }
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [options]
+
+Options:
+  --help, -h     Show this help and exit
+
+Description:
+  $MSG_DESC
+
+$MSG_FEAT_HEAD
+  $MSG_FEAT_1
+  $MSG_FEAT_2
+  $MSG_FEAT_3
+  $MSG_FEAT_4
+EOF
+}
+
+# --- [NEW] Remote Dependency Manager (Non-Blocking) ---
+check_dependencies() {
+    log "$MSG_FETCH_LIST"
+    
+    # Create a temp file
+    local temp_list="/tmp/shorin_niri_deps_$(date +%s).txt"
+
+    # Download with curl (Silent, Follow redirects, Output to temp)
+    # If download fails, just warn and return 0 (continue script)
+    if ! curl -sL "$APP_LIST_URL" -o "$temp_list"; then
+        warn "$MSG_FETCH_FAIL"
+        return 0
+    fi
+
+    # Detect AUR Helper (Prioritize paru > yay > pacman)
+    local helper=""
+    if command -v paru &> /dev/null; then helper="paru"
+    elif command -v yay &> /dev/null; then helper="yay"
+    else 
+        helper="sudo pacman"
+    fi
+
+    local missing_pkgs=()
+    
+    # Process the TEMP file line by line
+    while read -r line; do
+        # 1. Remove comments
+        local clean_line="${line%%#*}"
+        # 2. Remove 'AUR:' prefix
+        clean_line="${clean_line#AUR:}"
+        # 3. Trim whitespace
+        local pkg_name=$(echo "$clean_line" | xargs)
+        # 4. Skip empty lines
+        [ -z "$pkg_name" ] && continue
+        
+        # 5. Check if installed
+        if ! pacman -Q "$pkg_name" &> /dev/null; then
+            missing_pkgs+=("$pkg_name")
+        fi
+    done < "$temp_list"
+
+    # Remove the temp file immediately
+    rm -f "$temp_list"
+
+    if [ ${#missing_pkgs[@]} -gt 0 ]; then
+        warn "$MSG_INSTALL_DEPS ${missing_pkgs[*]}"
+        
+        # [MODIFIED] Try to install, but do NOT exit on failure.
+        # Just show a warning message and let the script proceed.
+        if ! $helper -S --needed "${missing_pkgs[@]}"; then
+            warn "$MSG_INSTALL_FAIL"
+        fi
+    else
+        success "$MSG_DEPS_OK"
+    fi
+}
+
+# --- Link Function ---
+link_recursive() {
+  local src_dir="$1"
+  local dest_dir="$2"
+  
+  mkdir -p "$dest_dir"
+  find "$src_dir" -mindepth 1 -maxdepth 1 -not -path '*/.git*' | while read -r src_path; do
+    local item_name=$(basename "$src_path")
+    local need_recurse=false
+
+    if [ "$item_name" == ".config" ] || [ "$item_name" == ".local" ]; then
+        need_recurse=true
+    elif [[ "$src_dir" == *".local" ]] && [ "$item_name" == "share" ]; then
+        need_recurse=true
+    fi
+
+    if [ "$need_recurse" = true ]; then
+        link_recursive "$src_path" "$dest_dir/$item_name"
+    else
+        local target_path="$dest_dir/$item_name"
+
+        if [ -e "$target_path" ] && [ ! -L "$target_path" ]; then          
+            warn "SKIP: $target_path"
+            continue
+        fi
+
+        if [ -L "$target_path" ] && [ "$(readlink -f "$target_path")" == "$src_path" ]; then
+            continue
+        fi
+
+        if [ -L "$target_path" ]; then
+            rm -rf "$target_path"
+        fi
+        ln -sf "$src_path" "$target_path"
+    fi
+  done
+}
+
+# --- 6. Argument Parsing ---
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# ==============================================================================
+# Core Execution Flow
+# ==============================================================================
+
+if [ ! -d "$DOTFILES_REPO/.git" ]; then
+    error "$MSG_ERR_REPO $DOTFILES_REPO"
+fi
+
+cd "$DOTFILES_REPO" || exit 1
+
+# 1. Backup (Interactive)
+mkdir -p "$BACKUP_ROOT"
+BACKUP_DONE=false
+
+echo -ne "${H_YELLOW}${MSG_ASK_BACKUP}${NC} "
+read -r OPT_BACKUP
+OPT_BACKUP=${OPT_BACKUP:-Y}
+
+if [[ "$OPT_BACKUP" =~ ^[yY] ]]; then
+    log "$MSG_BACKUP_ING"
+    if quicksave; then
+        log "$MSG_QUICKSAVE"
+    fi
+    tar -czf "$BACKUP_FILE" -C "$DOTFILES_REPO" . 2>/dev/null
+    success "$MSG_BACKUP_DONE"
+    BACKUP_DONE=true
+else
+    log "$MSG_BACKUP_SKIP"
+fi
+
+# 2. Update Logic (Git Management)
+log "$MSG_CHECK_UPDATE"
+git fetch --depth 1 origin "$BRANCH"
+
+LOCAL_HASH=$(git rev-parse HEAD)
+REMOTE_HASH=$(git rev-parse "origin/$BRANCH")
+
+if [ "$LOCAL_HASH" == "$REMOTE_HASH" ]; then
+    # Ensure sparse checkout is correct even if no updates
+    git config core.sparseCheckout true
+    SPARSE_FILE=".git/info/sparse-checkout"
+    truncate -s 0 "$SPARSE_FILE"
+    for item in "${TARGET_DIRS[@]}"; do echo "$item" >> "$SPARSE_FILE"; done
+    git read-tree -mu HEAD 2>/dev/null || true
+
+    success "$MSG_UP_TO_DATE"
+else
+    HAS_LOCAL_CHANGES=false
+    if [ -n "$(git status --porcelain)" ]; then
+        HAS_LOCAL_CHANGES=true
+        warn "$MSG_LOCAL_CHANGE"
+        
+        if [ -z "$(git config user.email)" ]; then
+            git config user.email "updater@shorin.local"
+            git config user.name "Shorin Updater"
+        fi
+        
+        git add -A
+        git commit -m "TEMP_SAVE" --quiet || error "$MSG_ERR_COMMIT"
+    fi
+
+    # Update Sparse Checkout
+    git config core.sparseCheckout true
+    SPARSE_FILE=".git/info/sparse-checkout"
+    truncate -s 0 "$SPARSE_FILE"
+    for item in "${TARGET_DIRS[@]}"; do echo "$item" >> "$SPARSE_FILE"; done
+    git read-tree -mu HEAD 2>/dev/null || true
+
+    log "$MSG_PULLING"
+    if git pull --rebase -Xtheirs origin "$BRANCH"; then
+        success "$MSG_CORE_OK"
+    else
+        git rebase --abort 2>/dev/null
+        error "$MSG_CONFLICT"
+    fi
+
+    if [ "$HAS_LOCAL_CHANGES" = true ]; then
+        log "$MSG_RESTORE"
+        git reset --soft HEAD~1
+        git reset
+        success "$MSG_RESTORE_OK"
+    fi
+fi
+
+# 3. Check Dependencies (Downloads from URL, Non-Blocking)
+check_dependencies
+
+# 4. Linking
+log "$MSG_LINKING"
+link_recursive "$DOTFILES_REPO/dotfiles" "$HOME"
+
+# 5. Cleanup
+log "$MSG_CLEANING"
+git reflog expire --expire=now --all
+git gc --prune=now 2>/dev/null
+
+echo ""
+echo -e "${H_GREEN}${MSG_ALL_DONE}${NC}"
+
+if [ "$BACKUP_DONE" = true ]; then
+    echo -e "${H_BLUE}${MSG_BACKUP_PATH}${NC} $BACKUP_FILE"
+fi

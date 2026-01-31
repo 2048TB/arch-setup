@@ -1,0 +1,47 @@
+imv                                      # Image Viewer for Wayland
+gnome-software                           # Gui store for flatpak software
+# --- Niri/Wayland Components ---
+xwayland-satellite                       # XWayland compatibility
+swayidle                                 # Idle management daemon (Screen lock/suspend)
+hyprlock                                 # Screen locker with effects (Blur/Screenshots)
+swayosd                                  # On-Screen Display for Volume/Brightness
+nwg-look                                 # GTK3 settings editor for Wayland
+qt5ct                                    # Qt5 configuration tool
+qt6ct                                    # Qt6 configuration tool
+swaync                                   # Notification center for Wayland
+
+# --- Aesthetics & Theming ---
+breeze                                   # KDE Breeze visual style
+
+# --- Wallpaper ---
+swww                                     # Efficient wallpaper daemon for Wayland
+
+# --- Status Bar ---
+waybar                                   # Highly customizable Wayland bar
+waifu2x-ncnn-vulkan                      # make anime wallpaper more clear
+# --- Screenshots & Recording ---
+grim                                     # Screenshot utility (Grabs images)
+slurp                                    # Region selector (Works with grim)
+wf-recorder                              # Screen recorder for Wayland
+hyprpicker                               # Color picker for Wayland
+satty                                   # Modern screenshot annotation tool
+wlsunset                                 # take care of your eyes
+# --- Clipboard ---
+wl-clipboard                             # Command-line copy/paste utilities
+cliphist                                 # Clipboard history manager
+# --- CLI Enhancements ---
+timg                                     # view image in terminal
+pacman-contrib                           # pacman utilus
+# --- Hardware & Audio ---
+brightnessctl                            # Device brightness control
+cava                                     # Console-based Audio Visualizer
+bluetui                                  # tui for bluetooth
+
+# --- AUR Packages ---
+AUR:vicinae-bin                          # Modern application launcher (https://docs.vicinae.com)
+AUR:waybar-niri-taskbar-git              # Waybar module: Niri Workspaces/Taskbar
+AUR:wlogout                              # Logout menu (Shutdown/Reboot/Lock)
+AUR:matugen                              # Material You theme generator
+AUR:waypaper                             # GUI wallpaper setter (Frontend for swww)
+AUR:ddcutil-service                      # Monitor hardware brightness control service
+AUR:ttf-lxgw-wenkai-screen               # xia2 wu4 wen2 kai3 font

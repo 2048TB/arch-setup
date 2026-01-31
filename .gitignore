@@ -1,0 +1,22 @@
+# Installation state
+.install_progress
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Log files
+*.log
+
+# macOS
+.DS_Store
+
+# Backup archives
+*.tar.gz
+config_backup_*
+
+# User-specific ignore
+.vscode/
+.idea/

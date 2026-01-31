@@ -1,0 +1,53 @@
+#!/bin/sh
+# 共享环境变量配置
+# 由 .bashrc 和 .zshrc 共同引用
+
+############################################
+# 用户 PATH 配置
+############################################
+add_to_path() {
+    case ":$PATH:" in
+        *":$1:"*) ;;
+        *) PATH="$1:$PATH" ;;
+    esac
+}
+
+add_to_path "$HOME/.local/bin"
+add_to_path "$HOME/bin"
+
+############################################
+# Cargo 环境
+############################################
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+############################################
+# NVM
+############################################
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+
+############################################
+# Go
+############################################
+add_to_path "/usr/local/go/bin"
+[ -d "$HOME/go/bin" ] && add_to_path "$HOME/go/bin"
+
+############################################
+# Bun
+############################################
+export BUN_INSTALL="$HOME/.bun"
+add_to_path "$BUN_INSTALL/bin"
+
+############################################
+# .NET
+############################################
+export DOTNET_ROOT="$HOME/.dotnet"
+[ -d "$HOME/.dotnet" ] && add_to_path "$HOME/.dotnet"
+
+############################################
+# 其他环境文件
+############################################
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+
+export PATH
