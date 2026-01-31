@@ -1,5 +1,4 @@
 #!/bin/bash
-#!/bin/bash
 
 # ==============================================================================
 # 00-arch-base-install.sh - Arch Base System Installation for ISO Environment
