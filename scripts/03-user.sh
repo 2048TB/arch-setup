@@ -38,34 +38,37 @@ if [ -n "$EXISTING_USER" ]; then
 else
     warn "No standard user found (UID 1000)."
     
-    # 交互式输入用户名循环
-    while true; do
-        echo ""
-        # 使用 echo -ne 配合颜色变量实现漂亮的输入提示
-        echo -ne "   ${ARROW} ${H_YELLOW}Please enter new username:${NC} "
-        read INPUT_USER
-        
-        # 去除前后空格
-        INPUT_USER=$(echo "$INPUT_USER" | xargs)
-        
-        # 空值检查
-        if [[ -z "$INPUT_USER" ]]; then
-            warn "Username cannot be empty."
-            continue
-        fi
+    # 支持环境变量预设（零交互模式）
+    if [ -n "$SHORIN_USERNAME" ]; then
+        MY_USERNAME="$SHORIN_USERNAME"
+        info_kv "Username" "$MY_USERNAME" "(From ENV)"
+        log "Using predefined username from SHORIN_USERNAME."
+    else
+        # 交互式输入用户名循环
+        while true; do
+            echo ""
+            echo -ne "   ${ARROW} ${H_YELLOW}Please enter new username:${NC} "
+            read INPUT_USER
+            
+            INPUT_USER=$(echo "$INPUT_USER" | xargs)
+            
+            if [[ -z "$INPUT_USER" ]]; then
+                warn "Username cannot be empty."
+                continue
+            fi
 
-        # 确认提示
-        echo -ne "   ${INFO} Create user '${BOLD}${H_CYAN}${INPUT_USER}${NC}'? [Y/n] "
-        read CONFIRM
-        CONFIRM=${CONFIRM:-Y}
-        
-        if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-            MY_USERNAME="$INPUT_USER"
-            break
-        else
-            log "Cancelled. Please re-enter."
-        fi
-    done
+            echo -ne "   ${INFO} Create user '${BOLD}${H_CYAN}${INPUT_USER}${NC}'? [Y/n] "
+            read CONFIRM
+            CONFIRM=${CONFIRM:-Y}
+            
+            if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+                MY_USERNAME="$INPUT_USER"
+                break
+            else
+                log "Cancelled. Please re-enter."
+            fi
+        done
+    fi
 fi
 
 # 将用户名导出到临时文件，供后续脚本 (如安装桌面环境时) 使用
@@ -88,18 +91,31 @@ else
     log "Creating new user '${MY_USERNAME}'..."
     exe useradd -m -g wheel -s /bin/zsh "$MY_USERNAME"
     
-    log "Setting password for ${MY_USERNAME}..."
-    echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
-    # passwd 必须要交互，不能用 exe 包装
-    passwd "$MY_USERNAME"
-    PASSWORD_STATUS=$?
-    echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
-    
-    if [ $PASSWORD_STATUS -eq 0 ]; then 
-        success "Password set successfully."
-    else 
-        error "Failed to set password. Script aborted."
-        exit 1
+    # 支持环境变量预设密码（零交互模式）
+    if [ -n "$SHORIN_PASSWORD" ]; then
+        log "Setting password from SHORIN_PASSWORD..."
+        echo "${MY_USERNAME}:${SHORIN_PASSWORD}" | chpasswd
+        PASSWORD_STATUS=$?
+        
+        if [ $PASSWORD_STATUS -eq 0 ]; then
+            success "Password set successfully (non-interactive)."
+        else
+            error "Failed to set password via chpasswd."
+            exit 1
+        fi
+    else
+        log "Setting password for ${MY_USERNAME} (interactive)..."
+        echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
+        passwd "$MY_USERNAME"
+        PASSWORD_STATUS=$?
+        echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
+        
+        if [ $PASSWORD_STATUS -eq 0 ]; then 
+            success "Password set successfully."
+        else 
+            error "Failed to set password. Script aborted."
+            exit 1
+        fi
     fi
 fi
 

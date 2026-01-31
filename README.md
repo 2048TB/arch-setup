@@ -41,6 +41,19 @@ bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/s
 bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
 ```
 
+**场景3: 零交互自动化安装（预设用户名密码）**
+```bash
+# ISO环境下完全自动化安装
+SHORIN_USERNAME="myuser" SHORIN_PASSWORD="mypassword" \
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+
+# ✨ 完全无交互：
+#   - 自动创建用户myuser
+#   - 自动设置密码
+#   - 用户自动获得sudo权限（wheel组）
+#   - 无需任何手动输入
+```
+
 ### 方法2：手动克隆（已安装系统）
 
 ```bash
@@ -120,6 +133,19 @@ BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-s
 
 ## 🔧 环境变量
 
+### 用户配置（零交互模式）
+```bash
+# 预设用户名和密码（ISO自动安装必备）
+SHORIN_USERNAME="username" SHORIN_PASSWORD="password" bash strap.sh
+
+# 完整示例（ISO零交互安装）
+SHORIN_USERNAME="shorin" \
+SHORIN_PASSWORD="mypassword123" \
+CN_MIRROR=1 \
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+```
+
+### 其他选项
 ```bash
 # 调试模式
 DEBUG=1 sudo bash install.sh
@@ -129,6 +155,20 @@ CN_MIRROR=1 sudo bash install.sh
 
 # 指定安装分支
 BRANCH=dev bash strap.sh
+```
+
+**权限说明：**
+- ✅ 用户自动添加到 `wheel` 组（标准sudo权限）
+- ✅ sudoers自动配置：`%wheel ALL=(ALL:ALL) ALL`
+- ✅ 等同root权限，但更安全（通过sudo执行管理命令）
+- ✅ 密码锁定禁用：`faillock deny=0`（防止误锁）
+- ❌ **不推荐**直接使用root账户（安全风险）
+
+**验证sudo权限：**
+```bash
+# 登录用户后
+sudo whoami  # 输出: root
+sudo pacman -Syu  # 可执行系统管理
 ```
 
 ## 🛡️ 快照与恢复

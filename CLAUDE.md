@@ -74,7 +74,7 @@ strap.sh (Bootstrap)
 01-base.sh            → 基础系统（yay/paru, 字体, archlinuxcn）
 02-musthave.sh        → 必备软件（音频/输入法/蓝牙/fastfetch/flatpak）
 02a-dualboot-fix.sh   → 双系统修复（Windows引导/os-prober）
-03-user.sh            → 用户创建（zsh默认shell）+ 自动部署configs配置
+03-user.sh            → 用户创建（zsh默认shell，支持SHORIN_USERNAME/PASSWORD环境变量）+ 自动部署configs配置 + wheel组sudo权限
 03b-gpu-driver.sh     → GPU驱动智能检测（AMD/Intel/NVIDIA多版本）
 03c-snapshot-before-desktop.sh → 桌面环境前快照
 04-niri-setup.sh      → Niri桌面（本地niri-dotfiles部署）
@@ -341,6 +341,24 @@ BRANCH=dev bash strap.sh
 
 **环境变量**
 ```bash
-DEBUG=1 sudo bash install.sh           # 调试模式
-CN_MIRROR=1 sudo bash install.sh       # 强制中国镜像
+# 零交互模式（预设用户名密码）
+SHORIN_USERNAME="user" SHORIN_PASSWORD="pass" bash install.sh
+
+# ISO零交互完整示例（推荐）
+SHORIN_USERNAME="shorin" SHORIN_PASSWORD="Secure123!" CN_MIRROR=1 \
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+
+# 调试模式
+DEBUG=1 sudo bash install.sh
+
+# 强制中国镜像
+CN_MIRROR=1 sudo bash install.sh
 ```
+
+**变量说明：**
+- `SHORIN_USERNAME`: 预设用户名（跳过交互输入）
+- `SHORIN_PASSWORD`: 预设密码（跳过交互输入）
+- 用户自动添加到wheel组并配置sudoers（sudo权限）
+- `DEBUG`: 调试模式（0/1）
+- `CN_MIRROR`: 强制中国镜像（0/1）
+- `BRANCH`: Git分支选择（main/dev）

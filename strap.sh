@@ -5,12 +5,26 @@
 # ==============================================================================
 
 # --- [配置区域] ---
-# 优先使用环境变量传入的分支名，如果没传，则默认使用 'main'
+# 支持环境变量配置
 TARGET_BRANCH="${BRANCH:-main}"
 REPO_URL="https://github.com/SHORiN-KiWATA/shorin-arch-setup.git"
 DIR_NAME="shorin-arch-setup"
 
+# 导出用户配置（供install.sh使用）
+export SHORIN_USERNAME="${SHORIN_USERNAME:-}"
+export SHORIN_PASSWORD="${SHORIN_PASSWORD:-}"
+export DEBUG="${DEBUG:-0}"
+export CN_MIRROR="${CN_MIRROR:-0}"
+
 echo -e "\033[0;34m>>> Preparing to install from branch: $TARGET_BRANCH\033[0m"
+
+# 显示配置信息
+if [ -n "$SHORIN_USERNAME" ]; then
+    echo -e "\033[0;32m>>> Username: $SHORIN_USERNAME (non-interactive mode)\033[0m"
+fi
+if [ -n "$SHORIN_PASSWORD" ]; then
+    echo -e "\033[0;32m>>> Password: ******** (preset)\033[0m"
+fi
 
 # 1. 检查并安装 git
 if ! command -v git &> /dev/null; then
