@@ -249,7 +249,7 @@ info_kv "Boot Mode" "$BOOT_MODE" "(auto/override)"
 section "Step 1/7" "Final Confirmation"
 
 # 再次检查是否为系统盘
-local warning_level="CRITICAL"
+warning_level="CRITICAL"
 if is_system_disk "$TARGET_DISK"; then
     warning_level="${H_RED}CRITICAL: SYSTEM DISK${NC}"
 elif has_partitions "$TARGET_DISK"; then
