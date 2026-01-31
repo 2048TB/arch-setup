@@ -16,11 +16,17 @@ Arch Linux 全自动安装系统 - 从ISO到桌面的一键部署
 
 ### ISO环境全新安装
 
+**交互式模式**（自动检测并选择磁盘）：
 ```bash
 # 1. 启动Arch ISO，连接网络
 iwctl  # WiFi配置
 
-# 2. 运行一键安装
+# 2. 运行安装（会显示磁盘选择菜单）
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
+```
+
+**快速模式**（指定磁盘）：
+```bash
 TARGET_DISK=/dev/nvme0n1 \
   bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 ```
@@ -99,11 +105,13 @@ sudo bash scripts/install.sh
 8. 自动重启（10s倒计时）
 
 ### 安全机制
-- ✅ 磁盘大小检查（最小20GB）
-- ✅ 必须显式指定 TARGET_DISK
-- ✅ 30秒确认超时（防误操作）
-- ✅ mmcblk/nvme/sata自动识别
-- ✅ ROOT_PASSWORD_HASH格式验证
+- ✅ **智能磁盘检测** - 自动过滤光驱/小容量磁盘
+- ✅ **状态感知** - 区分空盘/有数据/系统盘（高亮警告）
+- ✅ **双重确认** - 系统盘需输入完整磁盘名，普通盘输入yes
+- ✅ **磁盘信息展示** - 型号/容量/接口/分区状态一目了然
+- ✅ **超时保护** - 60秒无操作自动选择第一块盘
+- ✅ **最小容量检查** - 自动跳过小于20GB的磁盘
+- ✅ **分区检测** - 显示现有分区和挂载点
 
 ## 🔧 环境变量
 

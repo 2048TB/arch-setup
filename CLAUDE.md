@@ -14,6 +14,9 @@ Shorin Arch Setup - Arch Linux 自动化安装系统，支持 **Arch ISO环境�
 ```
 [ISO环境]
 scripts/strap.sh → scripts/install.sh → 00-arch-base-install.sh
+  → 磁盘选择菜单（交互式/环境变量）
+  → 磁盘状态检测（空盘/有数据/系统盘）
+  → 双重确认机制
   → pacstrap → arch-chroot → continue-install.sh
   → scripts/install.sh (SKIP_BASE_INSTALL=1) → modules.sh
 
@@ -128,11 +131,57 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 - 部署时机：04d-gnome.sh
 - 内容：GTK/dconf/gnome-shell扩展
 
+## 智能磁盘选择
+
+### 功能特性
+- **自动扫描** - 检测所有≥20GB的硬盘
+- **智能过滤** - 排除光驱，警告USB设备
+- **状态检测** - 区分三种状态：
+  - ✓ EMPTY - 空盘（绿色）
+  - ⚠ DATA - 有分区但非系统盘（黄色）
+  - ⚠ SYSTEM - 有挂载点的系统盘（红色）
+- **详细信息** - 显示型号/容量/类型（SSD/HDD）/接口（NVMe/SATA/USB）
+- **安全确认**：
+  - 空盘/数据盘：输入 `yes`
+  - 系统盘：必须输入完整磁盘名（如 `/dev/nvme0n1`）
+- **超时处理** - 60秒无操作自动选择第一块盘
+
+### 使用示例
+
+**交互式模式**（推荐新手）：
+```bash
+# 不指定TARGET_DISK，自动显示菜单
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
+
+# 菜单示例：
+# ╭────────────────────────────────────────────────────────────────────────
+# │ Select Target Disk (ALL DATA WILL BE ERASED):
+# │
+# │  [1] /dev/nvme0n1    476.9G
+# │      Samsung SSD 980 PRO 500GB   SSD NVMe ✓ EMPTY
+# │
+# │  [2] /dev/sda        931.5G
+# │      WDC WD10EZEX-08WN4A0         HDD SATA ⚠ DATA
+# │
+# ╰────────────────────────────────────────────────────────────────────────
+```
+
+**零交互模式**（自动化部署）：
+```bash
+TARGET_DISK=/dev/nvme0n1 \
+CONFIRM_DISK_WIPE=YES \
+  bash <(curl -L ...)
+```
+
+**系统盘安全机制**：
+- 检测到系统盘时，需输入完整磁盘名确认（不接受`yes`）
+- CONFIRM_DISK_WIPE=YES 对系统盘无效（强制手动确认）
+
 ## 环境变量
 
 ### ISO环境专用
-- `TARGET_DISK`: 目标磁盘（必填）
-- `CONFIRM_DISK_WIPE`: 跳过确认（YES）
+- `TARGET_DISK`: 目标磁盘（可选，留空则显示交互菜单）
+- `CONFIRM_DISK_WIPE`: 跳过确认（YES，仅非系统盘）
 - `ROOT_PASSWORD_HASH`: Root密码哈希
 - `BOOT_MODE`: uefi|bios（默认自动）
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/bin/bash
 
 # ==============================================================================
 # 00-arch-base-install.sh - Arch Base System Installation for ISO Environment
@@ -41,19 +42,175 @@ echo ""
 # ==============================================================================
 # STEP 1: Disk Selection & Validation
 # ==============================================================================
-section "Step 1/7" "Disk Selection"
 
-log "Scanning available disks..."
-lsblk -d -n -o NAME,SIZE,TYPE | grep disk || true
+# --- Disk Analysis Functions ---
+
+# 检测磁盘是否有分区
+has_partitions() {
+    local disk="$1"
+    [ "$(lsblk -n -o TYPE "$disk" | grep -c part)" -gt 0 ]
+}
+
+# 检测是否为系统盘（有挂载分区）
+is_system_disk() {
+    local disk="$1"
+    lsblk -n -o MOUNTPOINT "$disk" 2>/dev/null | grep -qE '^(/|/boot|/home|/var)'
+}
+
+# 检测磁盘类型（过滤不适合的类型）
+is_suitable_disk() {
+    local disk="$1"
+    local rota=$(lsblk -d -n -o ROTA "$disk" 2>/dev/null)
+    local tran=$(lsblk -d -n -o TRAN "$disk" 2>/dev/null)
+    
+    # 排除光驱
+    [[ "$(lsblk -d -n -o TYPE "$disk")" != "rom" ]] || return 1
+    
+    # 警告USB设备（仍然允许选择）
+    if [[ "$tran" == "usb" ]]; then
+        return 2  # USB disk (warning)
+    fi
+    
+    return 0
+}
+
+# 获取磁盘详细信息
+get_disk_info() {
+    local disk="$1"
+    local model=$(lsblk -d -n -o MODEL "$disk" 2>/dev/null | xargs)
+    local size=$(lsblk -d -n -o SIZE "$disk")
+    local tran=$(lsblk -d -n -o TRAN "$disk" 2>/dev/null)
+    local rota=$(lsblk -d -n -o ROTA "$disk" 2>/dev/null)
+    
+    # 磁盘类型标识
+    local type_label=""
+    if [ "$rota" = "0" ]; then
+        type_label="SSD"
+    else
+        type_label="HDD"
+    fi
+    
+    # 传输接口
+    local tran_label=""
+    case "$tran" in
+        nvme) tran_label="NVMe" ;;
+        sata) tran_label="SATA" ;;
+        usb)  tran_label="USB" ;;
+        *)    tran_label="$tran" ;;
+    esac
+    
+    # 状态检测
+    local status=""
+    if is_system_disk "$disk"; then
+        status="${H_RED}⚠ SYSTEM${NC}"
+    elif has_partitions "$disk"; then
+        status="${H_YELLOW}⚠ DATA${NC}"
+    else
+        status="${H_GREEN}✓ EMPTY${NC}"
+    fi
+    
+    echo "${model:-Unknown}|${size}|${type_label}|${tran_label}|${status}"
+}
+
+# --- Interactive Disk Selection ---
+select_disk() {
+    section "Step 1/7" "Disk Selection"
+    
+    log "Scanning available disks..."
+    
+    # 收集所有合适的磁盘
+    local -a DISKS=()
+    local -a DISK_INFO=()
+    
+    while IFS= read -r disk_name; do
+        local disk_path="/dev/$disk_name"
+        
+        # 跳过不合适的磁盘（如光驱）
+        if ! is_suitable_disk "$disk_path"; then
+            [ $? -eq 1 ] && continue  # 完全跳过（光驱）
+        fi
+        
+        # 检查最小大小
+        local size_bytes=$(lsblk -d -n -o SIZE -b "$disk_path")
+        if [ "$size_bytes" -lt "$MIN_DISK_SIZE_BYTES" ]; then
+            continue
+        fi
+        
+        DISKS+=("$disk_path")
+        DISK_INFO+=("$(get_disk_info "$disk_path")")
+    done < <(lsblk -d -n -o NAME,TYPE | awk '$2=="disk" {print $1}')
+    
+    if [ ${#DISKS[@]} -eq 0 ]; then
+        error "No suitable disks found (min ${MIN_DISK_SIZE_GB}GB required)."
+        exit 1
+    fi
+    
+    # 绘制菜单
+    local HR="────────────────────────────────────────────────────────────────────────"
+    echo -e "${H_PURPLE}╭${HR}${NC}"
+    echo -e "${H_PURPLE}│${NC} ${BOLD}Select Target Disk (ALL DATA WILL BE ERASED):${NC}"
+    echo -e "${H_PURPLE}│${NC}"
+    
+    local idx=1
+    for i in "${!DISKS[@]}"; do
+        local disk="${DISKS[$i]}"
+        IFS='|' read -r model size type tran status <<< "${DISK_INFO[$i]}"
+        
+        # 格式化显示
+        printf "${H_PURPLE}│${NC}  ${H_CYAN}[%d]${NC} %-15s ${BOLD}%s${NC}\n" \
+            "$idx" "$disk" "$size"
+        printf "${H_PURPLE}│${NC}      %-30s ${DIM}%s %s${NC} %b\n" \
+            "$model" "$type" "$tran" "$status"
+        
+        ((idx++))
+    done
+    
+    echo -e "${H_PURPLE}│${NC}"
+    echo -e "${H_PURPLE}╰${HR}${NC}"
+    echo ""
+    
+    # 输入处理
+    echo -e "   ${DIM}Auto-select first disk in 60s...${NC}"
+    local choice=""
+    if ! read -t 60 -p "$(echo -e "   ${H_YELLOW}Select [1-${#DISKS[@]}] or Enter for auto: ${NC}")" choice; then
+        choice=""
+    fi
+    
+    # 默认选择第一个
+    if [ -z "$choice" ]; then
+        choice=1
+        log "Timeout - using first disk."
+    fi
+    
+    # 验证输入
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#DISKS[@]}" ]; then
+        export TARGET_DISK="${DISKS[$((choice-1))]}"
+        log "Selected: $TARGET_DISK"
+    else
+        error "Invalid selection."
+        exit 1
+    fi
+    
+    echo ""
+}
+
+# --- Main Disk Selection Logic ---
 
 TARGET_DISK="${TARGET_DISK:-}"
 if [ -z "$TARGET_DISK" ]; then
-    error "TARGET_DISK is required. Example: TARGET_DISK=/dev/nvme0n1"
-    exit 1
+    # 交互式选择
+    select_disk
+else
+    # 环境变量模式 - 仅做验证
+    section "Step 1/7" "Disk Selection"
+    log "Using TARGET_DISK from environment: $TARGET_DISK"
 fi
 
+# --- Validation ---
 if [ ! -b "$TARGET_DISK" ]; then
     error "TARGET_DISK is not a block device: $TARGET_DISK"
+    log "Available disks:"
+    lsblk -d -o NAME,SIZE,TYPE | grep disk || true
     exit 1
 fi
 
@@ -89,28 +246,71 @@ if [ "$BOOT_MODE" != "uefi" ] && [ "$BOOT_MODE" != "bios" ]; then
 fi
 info_kv "Boot Mode" "$BOOT_MODE" "(auto/override)"
 
-# 警告确认
+# --- Final Confirmation ---
+section "Step 1/7" "Final Confirmation"
+
+# 再次检查是否为系统盘
+local warning_level="CRITICAL"
+if is_system_disk "$TARGET_DISK"; then
+    warning_level="${H_RED}CRITICAL: SYSTEM DISK${NC}"
+elif has_partitions "$TARGET_DISK"; then
+    warning_level="${H_YELLOW}WARNING: HAS DATA${NC}"
+else
+    warning_level="${H_GREEN}OK: EMPTY DISK${NC}"
+fi
+
 echo ""
 echo -e "${H_RED}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_RED}║  WARNING: THIS WILL ERASE ALL DATA ON $TARGET_DISK${NC}"
-echo -e "${H_RED}║  Disk: $(lsblk -d -n -o MODEL "$TARGET_DISK" 2>/dev/null || echo 'Unknown')${NC}"
-echo -e "${H_RED}║  Size: $DISK_SIZE_HUMAN${NC}"
+echo -e "${H_RED}║  ⚠️  FINAL WARNING: ALL DATA WILL BE DESTROYED  ⚠️             ║${NC}"
+echo -e "${H_RED}╠════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${H_RED}║${NC}  Disk     : ${BOLD}$TARGET_DISK${NC}"
+echo -e "${H_RED}║${NC}  Model    : $(lsblk -d -n -o MODEL "$TARGET_DISK" 2>/dev/null || echo 'Unknown')"
+echo -e "${H_RED}║${NC}  Size     : $DISK_SIZE_HUMAN"
+echo -e "${H_RED}║${NC}  Status   : $warning_level"
+
+# 显示现有分区（如果有）
+if has_partitions "$TARGET_DISK"; then
+    echo -e "${H_RED}║${NC}"
+    echo -e "${H_RED}║${NC}  ${H_YELLOW}Existing partitions:${NC}"
+    while IFS= read -r line; do
+        echo -e "${H_RED}║${NC}    $line"
+    done < <(lsblk -n -o NAME,SIZE,FSTYPE,MOUNTPOINT "$TARGET_DISK" | grep -v "^$(basename "$TARGET_DISK")")
+fi
+
 echo -e "${H_RED}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 if [ "${CONFIRM_DISK_WIPE:-}" = "YES" ]; then
     confirm="yes"
+    log "Auto-confirmed via CONFIRM_DISK_WIPE=YES"
 else
-    if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Confirm to ERASE $TARGET_DISK? [yes/NO]: ${NC}")" confirm; then
-        confirm=""
+    # 系统盘需要输入完整磁盘名称
+    if is_system_disk "$TARGET_DISK"; then
+        echo -e "${H_RED}>>> SYSTEM DISK DETECTED! Type the FULL disk name to confirm:${NC}"
+        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type '$TARGET_DISK' to confirm: ${NC}")" confirm; then
+            confirm=""
+        fi
+        
+        if [ "$confirm" != "$TARGET_DISK" ]; then
+            error "Confirmation failed. Installation cancelled."
+            exit 1
+        fi
+        confirm="yes"
+    else
+        # 普通磁盘只需输入 yes
+        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type 'yes' to ERASE $TARGET_DISK: ${NC}")" confirm; then
+            confirm=""
+        fi
+        confirm=${confirm:-NO}
     fi
-    confirm=${confirm:-NO}
 fi
 
 if [ "$confirm" != "yes" ]; then
     error "Installation cancelled by user."
     exit 1
 fi
+
+success "Disk selection confirmed: $TARGET_DISK"
 
 # ==============================================================================
 # STEP 2: Partitioning
@@ -325,16 +525,22 @@ fi
 
 # Root 密码（无人值守）
 if [ -n "${ROOT_PASSWORD_HASH:-}" ]; then
-  if [[ "$ROOT_PASSWORD_HASH" =~ ^\$[0-9]+\$ ]]; then
-    if ! echo "root:${ROOT_PASSWORD_HASH}" | chpasswd -e; then
-      echo "ERROR: Failed to set root password"
+  # 验证格式：$id$salt$hash（如 $6$rounds=5000$salt$hash）
+  if [[ "$ROOT_PASSWORD_HASH" =~ ^\$[0-9]+\$[^\$]+\$ ]]; then
+    if ! echo "root:${ROOT_PASSWORD_HASH}" | chpasswd -e 2>&1; then
+      echo "ERROR: Failed to set root password via chpasswd"
+      echo "Hash format may be invalid. Generate with: openssl passwd -6 'yourpassword'"
       exit 1
     fi
+    echo "Root password set from ROOT_PASSWORD_HASH"
   else
-    echo "ERROR: Invalid ROOT_PASSWORD_HASH format (expected \$id\$...)"
+    echo "ERROR: Invalid ROOT_PASSWORD_HASH format"
+    echo "Expected format: \$id\$salt\$hash"
+    echo "Generate with: openssl passwd -6 'yourpassword'"
     exit 1
   fi
 else
+  echo "No ROOT_PASSWORD_HASH provided. Setting password interactively:"
   passwd
 fi
 
