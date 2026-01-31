@@ -17,7 +17,7 @@ Arch Linux 自动化安装脚本 - 快速部署 Niri/GNOME 桌面环境
 ### 方法1：一键安装（推荐）
 
 ```bash
-bash <(curl -L is.gd/shorinsetup)
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
 ```
 
 ### 方法2：手动克隆
@@ -25,7 +25,7 @@ bash <(curl -L is.gd/shorinsetup)
 ```bash
 # 安装git并克隆仓库
 sudo pacman -Syu git
-git clone https://github.com/YOUR_USERNAME/shorin-arch-setup.git
+git clone https://github.com/2048TB/shorin-arch-setup.git
 cd shorin-arch-setup
 sudo bash install.sh
 ```
@@ -34,7 +34,7 @@ sudo bash install.sh
 
 ```bash
 sudo pacman -Syu --noconfirm git && \
-git clone https://github.com/YOUR_USERNAME/shorin-arch-setup.git && \
+git clone https://github.com/2048TB/shorin-arch-setup.git && \
 cd shorin-arch-setup && \
 sudo bash install.sh
 ```
