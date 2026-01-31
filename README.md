@@ -24,7 +24,8 @@ Arch Linux 全自动安装系统 - 从ISO到桌面的一键部署
 iwctl  # WiFi配置
 
 # 2. 运行一键安装（自动分区+完整部署）
-bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+TARGET_DISK=/dev/nvme0n1 \
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 
 # ✨ 自动完成：
 #   - 自动分区（EFI + Btrfs）
@@ -38,14 +39,19 @@ bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/s
 **场景2: 已安装Arch系统**
 ```bash
 # 仅配置桌面环境和应用（跳过分区）
-bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 ```
 
 **场景3: 零交互自动化安装（预设用户名密码）**
 ```bash
 # ISO环境下完全自动化安装
+# 先生成root密码哈希: openssl passwd -6 "yourpassword"
+TARGET_DISK=/dev/nvme0n1 \
+CONFIRM_DISK_WIPE=YES \
 SHORIN_USERNAME="myuser" SHORIN_PASSWORD="mypassword" \
-  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+ROOT_PASSWORD_HASH='$6$rounds=5000$...(paste generated hash here)...' \
+DESKTOP_ENV="niri" \
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 
 # ✨ 完全无交互：
 #   - 自动创建用户myuser
@@ -62,14 +68,14 @@ git clone https://github.com/2048TB/shorin-arch-setup.git
 cd shorin-arch-setup
 
 # 2. 运行安装器
-sudo bash install.sh
+sudo bash scripts/install.sh
 ```
 
 ### 指定分支
 
 ```bash
 # 使用开发分支
-BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 ```
 
 ## 🖥️ 支持的桌面环境
@@ -103,7 +109,7 @@ BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-s
 
 ### 自动分区方案
 ```
-/dev/sdX (自动检测最大磁盘)
+/dev/sdX (需显式指定 TARGET_DISK)
 ├─ sdX1  512MB   EFI System       (FAT32)
 └─ sdX2  剩余    Linux Filesystem (Btrfs)
     ├─ @            → /
@@ -112,6 +118,7 @@ BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-s
     ├─ @log         → /var/log
     └─ @cache       → /var/cache
 ```
+> BIOS 模式会创建 1M BIOS boot 分区（不创建 EFI 分区）
 
 ### 执行流程
 1. **环境检测** - 自动识别ISO/已安装系统
@@ -125,7 +132,8 @@ BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-s
 
 ### 安全机制
 - ✅ 磁盘大小检查（最小20GB）
-- ✅ 30秒确认超时（防止误操作）
+- ✅ ISO 模式必须显式指定 TARGET_DISK
+- ✅ 30秒确认超时（防止误操作，可用 CONFIRM_DISK_WIPE=YES 跳过）
 - ✅ 已安装系统自动跳过分区
 - ✅ SKIP_BASE_INSTALL标志防止重复
 
@@ -136,25 +144,62 @@ BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-s
 ### 用户配置（零交互模式）
 ```bash
 # 预设用户名和密码（ISO自动安装必备）
-SHORIN_USERNAME="username" SHORIN_PASSWORD="password" bash strap.sh
+TARGET_DISK=/dev/nvme0n1 \
+SHORIN_USERNAME="username" SHORIN_PASSWORD="password" bash scripts/strap.sh
 
 # 完整示例（ISO零交互安装）
+# 1. 生成root密码哈希: openssl passwd -6 "yourpassword"
+# 2. 替换下方 ROOT_PASSWORD_HASH 的值
 SHORIN_USERNAME="shorin" \
 SHORIN_PASSWORD="mypassword123" \
+TARGET_DISK="/dev/nvme0n1" \
+CONFIRM_DISK_WIPE=YES \
+ROOT_PASSWORD_HASH='$6$rounds=5000$...(paste your hash)...' \
 CN_MIRROR=1 \
-  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 ```
 
 ### 其他选项
 ```bash
 # 调试模式
-DEBUG=1 sudo bash install.sh
+DEBUG=1 sudo bash scripts/install.sh
+
+# 指定桌面环境（无人值守）
+DESKTOP_ENV="niri" sudo bash scripts/install.sh
+
+# 显式指定目标磁盘（ISO 必填）
+TARGET_DISK=/dev/nvme0n1 sudo bash scripts/install.sh
+
+# 强制擦盘确认（无人值守）
+CONFIRM_DISK_WIPE=YES sudo bash scripts/install.sh
+
+# 强制 BIOS/UEFI 模式（默认自动检测）
+BOOT_MODE="uefi" sudo bash scripts/install.sh
+
+# Root 密码哈希（无人值守）
+# 生成方法: openssl passwd -6 "yourpassword"
+ROOT_PASSWORD_HASH='$6$...(generated hash)...' sudo bash scripts/install.sh
+
+# 已安装系统强制生成 locale（默认只校验）
+FORCE_LOCALE_GEN=1 sudo bash scripts/install.sh
 
 # 强制使用中国镜像
-CN_MIRROR=1 sudo bash install.sh
+CN_MIRROR=1 sudo bash scripts/install.sh
 
 # 指定安装分支
-BRANCH=dev bash strap.sh
+BRANCH=dev bash scripts/strap.sh
+```
+
+### 配置文件（config.conf）
+可选：在项目根目录创建 `config.conf`，或使用 `SHORIN_CONFIG=/path/to/config.conf` 指定。
+配置文件会被自动加载并导出为环境变量，适合无人值守安装。
+
+参考模板：`config.conf.example`
+
+Root 密码哈希可用以下命令生成（择一）：
+```bash
+openssl passwd -6 'yourpassword'
+mkpasswd -m sha-512 'yourpassword'
 ```
 
 **权限说明：**
@@ -179,7 +224,8 @@ sudo pacman -Syu  # 可执行系统管理
 
 ### 回滚到初始状态
 ```bash
-sudo bash undochange.sh
+# 默认回滚到 "Before Shorin Setup"
+sudo bash scripts/install.sh rollback
 ```
 
 ### 查看快照
@@ -195,23 +241,18 @@ sudo snapper -c home list
 
 ```
 shorin-arch-setup/
-├── install.sh              # 主安装器
-├── strap.sh                # Bootstrap脚本
-├── scripts/                # 模块化脚本
-│   ├── 00-btrfs-init.sh   # Btrfs初始化
-│   ├── 01-base.sh         # 基础系统
-│   ├── 02-musthave.sh     # 必备软件
-│   ├── 03-user.sh         # 用户创建（自动部署zsh配置）
-│   ├── 03b-gpu-driver.sh  # GPU驱动
-│   ├── 04-niri-setup.sh   # Niri桌面
-│   ├── 04d-gnome.sh       # GNOME桌面
-│   ├── 07-grub-theme.sh   # GRUB主题
-│   └── 99-apps.sh         # 应用安装
+├── scripts/                # 安装脚本
+│   ├── install.sh         # 主安装器
+│   ├── strap.sh           # Bootstrap脚本
+│   ├── modules.sh         # 模块集合（原 00-99）
+│   ├── 00-utils.sh        # 工具函数
+│   └── 00-arch-base-install.sh # ISO基础安装
 ├── configs/                # 用户Shell配置（zsh/starship/ghostty）
 ├── niri-dotfiles/          # Niri完整配置
 ├── gnome-dotfiles/         # GNOME配置
 └── resources/              # 资源文件（Windows字体等）
 ```
+说明：`modules.sh` 内部包含 00-99 模块的实际实现（模块ID仍沿用旧文件名），并在顶部统一加载 `00-utils.sh` 与 strict mode。
 
 ## 🔍 开发指南
 

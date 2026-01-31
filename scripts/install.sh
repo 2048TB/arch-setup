@@ -4,9 +4,10 @@
 # Shorin Arch Setup - Main Installer (v1.1))
 # ==============================================================================
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$BASE_DIR/scripts"
-STATE_FILE="$BASE_DIR/.install_progress"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPTS_DIR="$REPO_DIR/scripts"
+STATE_FILE="$REPO_DIR/.install_progress"
 
 # --- Source Visual Engine ---
 if [ -f "$SCRIPTS_DIR/00-utils.sh" ]; then
@@ -15,6 +16,10 @@ else
     echo "Error: 00-utils.sh not found."
     exit 1
 fi
+# --- Config & Strict Mode ---
+CONFIG_FILE="${SHORIN_CONFIG:-$REPO_DIR/config.conf}"
+load_config
+enable_strict_mode
 
 # --- Constants ---
 readonly DESKTOP_SELECTION_TIMEOUT=120
@@ -22,7 +27,6 @@ readonly REFLECTOR_TIMEOUT=60
 readonly REBOOT_COUNTDOWN_SECONDS=10
 readonly REFLECTOR_AGE_HOURS=24
 readonly REFLECTOR_TOP_MIRRORS=10
-readonly TARGET_USER_UID=1000
 readonly EXIT_CODE_INTERRUPTED=130
 readonly EXIT_CODE_TIMEOUT=1
 
@@ -39,6 +43,10 @@ export CN_MIRROR=${CN_MIRROR:-0}
 
 check_root
 chmod +x "$SCRIPTS_DIR"/*.sh
+if [ ! -f "$SCRIPTS_DIR/modules.sh" ]; then
+    error "modules.sh not found in $SCRIPTS_DIR"
+    exit 1
+fi
 
 # --- ASCII Banners ---
 banner1() {
@@ -82,7 +90,7 @@ show_banner() {
         2) banner3 ;;
     esac
     echo -e "${NC}"
-    echo -e "${DIM}   :: Arch Linux Automation Protocol :: v1.1 ::${NC}"
+    echo -e "${DIM}   :: Arch Linux Automation Protocol :: v2.1 ::${NC}"
     echo ""
 }
 
@@ -118,7 +126,9 @@ select_desktop() {
     
     # 3. 输入处理
     echo -e "   ${DIM}Waiting for input (Timeout: 2 mins)...${NC}"
-    read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice
+    if ! read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice; then
+        choice=""
+    fi
     
     if [ -z "$choice" ]; then
         echo -e "\n${H_RED}Timeout or no selection.${NC}"
@@ -160,12 +170,12 @@ sys_dashboard() {
 
 # --- Main Execution ---
 
-# --- ISO Environment Check ---
-is_iso_environment() {
-    [ -d /run/archiso ] || \
-    [[ "$(findmnt / -o FSTYPE -n 2>/dev/null)" =~ ^(overlay|tmpfs|airootfs)$ ]] || \
-    [[ "$(hostname)" == "archiso" ]]
-}
+if [ "${1:-}" = "rollback" ]; then
+    shift || true
+    MODULE="rollback"
+    bash "$SCRIPTS_DIR/modules.sh" "$MODULE" "$@"
+    exit $?
+fi
 
 # 如果在ISO环境，先运行基础安装模块
 if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
@@ -176,7 +186,7 @@ if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
     if [ -f "$BASE_INSTALL_SCRIPT" ]; then
         bash "$BASE_INSTALL_SCRIPT"
         
-        # 基础安装完成后，脚本会在chroot内重新调用install.sh
+        # 基础安装完成后，脚本会在chroot内重新调用 scripts/install.sh
         # 此时SKIP_BASE_INSTALL=1，不会再次进入这个分支
         exit 0
     else
@@ -186,7 +196,20 @@ if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
     fi
 fi
 
-select_desktop
+if [ -n "${DESKTOP_ENV:-}" ]; then
+    DESKTOP_ENV="${DESKTOP_ENV,,}"
+    case "$DESKTOP_ENV" in
+        niri|gnome|none)
+            log "Using DESKTOP_ENV from config/env: $DESKTOP_ENV"
+            ;;
+        *)
+            error "Invalid DESKTOP_ENV: $DESKTOP_ENV (use niri|gnome|none)"
+            exit 1
+            ;;
+    esac
+else
+    select_desktop
+fi
 clear
 show_banner
 sys_dashboard
@@ -220,6 +243,11 @@ esac
 BASE_MODULES+=("07-grub-theme.sh" "99-apps.sh")
 MODULES=("${BASE_MODULES[@]}")
 
+if [ "${1:-}" = "--module" ] && [ -n "${2:-}" ]; then
+    ONLY_MODULE="$2"
+    MODULES=("$ONLY_MODULE")
+fi
+
 if [ ! -f "$STATE_FILE" ]; then touch "$STATE_FILE"; fi
 
 TOTAL_STEPS=${#MODULES[@]}
@@ -252,8 +280,9 @@ else
         echo -e "${H_YELLOW}╚══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         
-        read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in ${REFLECTOR_TIMEOUT}s): ${NC}")" choice
-        if [ $? -ne 0 ]; then echo ""; fi
+        if ! read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in ${REFLECTOR_TIMEOUT}s): ${NC}")" choice; then
+            echo ""
+        fi
         choice=${choice:-N}
         
         if [[ "$choice" =~ ^[Yy]$ ]]; then
@@ -268,7 +297,7 @@ else
         fi
     else
         log "Detecting location for optimization..."
-        COUNTRY_CODE=$(curl -s --max-time 2 https://ipinfo.io/country)
+        COUNTRY_CODE=$(curl -s --max-time 2 https://ipinfo.io/country || true)
         
         if [ -n "$COUNTRY_CODE" ]; then
             info_kv "Country" "$COUNTRY_CODE" "(Auto-detected)"
@@ -310,12 +339,6 @@ fi
 # --- Module Loop ---
 for module in "${MODULES[@]}"; do
     CURRENT_STEP=$((CURRENT_STEP + 1))
-    script_path="$SCRIPTS_DIR/$module"
-    
-    if [ ! -f "$script_path" ]; then
-        error "Module not found: $module"
-        continue
-    fi
 
     # Checkpoint Logic: Auto-skip if in state file
     if grep -q "^${module}$" "$STATE_FILE"; then
@@ -326,8 +349,10 @@ for module in "${MODULES[@]}"; do
 
     section "Module ${CURRENT_STEP}/${TOTAL_STEPS}" "$module"
 
-    bash "$script_path"
+    set +e
+    bash "$SCRIPTS_DIR/modules.sh" "$module"
     exit_code=$?
+    set -e
 
     if [ $exit_code -eq 0 ]; then
         # Only record success
@@ -341,7 +366,8 @@ for module in "${MODULES[@]}"; do
     else
         # Failure logic: do NOT write to STATE_FILE
         write_log "FATAL" "Module $module failed with exit code $exit_code"
-        error "Module execution failed."
+        error "Module execution failed: $module"
+        warn "You can retry with: sudo bash scripts/modules.sh $module"
         exit 1
     fi
 done
@@ -459,8 +485,16 @@ clean_intermediate_snapshots "home"
 
 
 # Detect user ID 1000 or prompt manually
-DETECTED_USER=$(awk -F: "\$3 == $TARGET_USER_UID {print \$1}" /etc/passwd)
-TARGET_USER="${DETECTED_USER:-$(read -p "Target user: " u && echo $u)}"
+DETECTED_USER=$(awk -F: "\$3 == 1000 {print \$1}" /etc/passwd)
+if [ -z "$DETECTED_USER" ]; then
+    read -p "Target user: " TARGET_USER || TARGET_USER=""
+    if [ -z "$TARGET_USER" ]; then
+        error "User required for cleanup"
+        exit 1
+    fi
+else
+    TARGET_USER="$DETECTED_USER"
+fi
 HOME_DIR="/home/$TARGET_USER"
 # --- 3. Remove Installer Files ---
 if [ -d "/root/shorin-arch-setup" ]; then
@@ -519,13 +553,12 @@ fi
 echo ""
 echo -e "${H_YELLOW}>>> System requires a REBOOT.${NC}"
 
-while read -r -t 0; do read -r; done
+while read -r -t 0.01 -n 10000 discard 2>/dev/null; do :; done
 
 for i in $(seq $REBOOT_COUNTDOWN_SECONDS -1 1); do
     echo -ne "\r   ${DIM}Auto-rebooting in ${i}s... (Press 'n' to cancel)${NC}"
     
-    read -t 1 -n 1 input
-    if [ $? -eq 0 ]; then
+    if read -t 1 -n 1 input; then
         if [[ "$input" == "n" || "$input" == "N" ]]; then
             echo -e "\n\n   ${H_BLUE}>>> Reboot cancelled.${NC}"
             exit 0

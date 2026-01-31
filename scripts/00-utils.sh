@@ -4,6 +4,12 @@
 # 00-utils.sh - The "TUI" Visual Engine (v4.0)
 # ==============================================================================
 
+# Idempotent guard for repeated sourcing (modules.sh embeds multiple modules)
+if [ -n "${SHORIN_UTILS_LOADED:-}" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+export SHORIN_UTILS_LOADED=1
+
 # --- Constants ---
 readonly FLATHUB_SELECTION_TIMEOUT=60
 readonly LOG_FILE_PERMISSIONS=666
@@ -44,11 +50,56 @@ export TEMP_LOG_FILE="/tmp/log-shorin-arch-setup.txt"
 
 # --- 2. 基础工具 ---
 
+on_error() {
+    local line="${1:-?}"
+    local src="${BASH_SOURCE[1]:-unknown}"
+    error "Unexpected error at ${src}:${line}"
+}
+
+enable_strict_mode() {
+    if [ "${STRICT_MODE:-1}" = "1" ]; then
+        if [ "${STRICT_MODE_ENABLED:-0}" = "1" ]; then
+            return 0
+        fi
+        export STRICT_MODE_ENABLED=1
+        set -Eeuo pipefail
+        shopt -s inherit_errexit 2>/dev/null || true
+        if [ "${STRICT_MODE_ERR_TRAP:-1}" = "1" ]; then
+            trap 'on_error ${LINENO}' ERR
+        fi
+    fi
+}
+
+load_config() {
+    local config_file=""
+    if [ -n "${SHORIN_CONFIG:-}" ]; then
+        config_file="$SHORIN_CONFIG"
+    elif [ -n "${CONFIG_FILE:-}" ]; then
+        config_file="$CONFIG_FILE"
+    elif [ -n "${BASE_DIR:-}" ] && [ -f "$BASE_DIR/config.conf" ]; then
+        config_file="$BASE_DIR/config.conf"
+    fi
+
+    if [ -n "$config_file" ] && [ -f "$config_file" ]; then
+        log "Loading config: $config_file"
+        # shellcheck source=/dev/null
+        set -a
+        source "$config_file"
+        set +a
+    fi
+}
+
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         echo -e "${H_RED}   $CROSS CRITICAL ERROR: Script must be run as root.${NC}"
         exit 1
     fi
+}
+
+is_iso_environment() {
+    [ -d /run/archiso ] || \
+    [[ "$(findmnt / -o FSTYPE -n 2>/dev/null)" =~ ^(overlay|tmpfs|airootfs)$ ]] || \
+    [[ "$(hostname)" == "archiso" ]]
 }
 
 write_log() {
@@ -133,6 +184,54 @@ exe() {
         echo -e "   ${H_GRAY}└────────────────────────────────────────────────────── ${H_RED}FAIL${H_GRAY} ─┘${NC}"
         write_log "FAIL" "Exit Code: $status"
         return $status
+    fi
+}
+
+# Set a GRUB key-value pair in /etc/default/grub
+set_grub_value() {
+    local key="$1"
+    local value="$2"
+    local conf_file="/etc/default/grub"
+    local escaped_value
+    escaped_value=$(printf '%s\n' "$value" | sed 's,[\/&],\\&,g')
+
+    if grep -q -E "^#\s*$key=" "$conf_file"; then
+        exe sed -i -E "s,^#\s*$key=.*,$key=\"$escaped_value\"," "$conf_file"
+    elif grep -q -E "^$key=" "$conf_file"; then
+        exe sed -i -E "s,^$key=.*,$key=\"$escaped_value\"," "$conf_file"
+    else
+        log "Appending new key: $key"
+        echo "$key=\"$escaped_value\"" >> "$conf_file"
+    fi
+}
+
+# Temporary sudo NOPASSWD helpers
+temp_sudo_begin() {
+    local user="$1"
+    local file="${2:-/etc/sudoers.d/99_shorin_installer_temp}"
+
+    if [ -z "$user" ]; then
+        error "temp_sudo_begin: user is empty"
+        return 1
+    fi
+
+    echo "$user ALL=(ALL) NOPASSWD: ALL" > "$file"
+    chmod 440 "$file"
+    echo "$file"
+}
+
+temp_sudo_end() {
+    local file="${1:-}"
+    [ -n "$file" ] && rm -f "$file"
+}
+
+# Safe systemd enable: start only when systemd is running
+systemctl_enable_now() {
+    local units=("$@")
+    if systemctl is-system-running >/dev/null 2>&1; then
+        exe systemctl enable --now "${units[@]}"
+    else
+        exe systemctl enable "${units[@]}"
     fi
 }
 
@@ -243,8 +342,9 @@ select_flathub_mirror() {
     render_menu_footer "$menu_width"
     
     local choice
-    read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice
-    [ $? -ne 0 ] && echo ""
+    if ! read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice; then
+        echo ""
+    fi
     choice=${choice:-1}
     
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
@@ -266,6 +366,10 @@ select_flathub_mirror() {
 }
 
 as_user() {
+  if [ -z "${TARGET_USER:-}" ]; then
+    error "TARGET_USER not defined. Call detect_target_user first."
+    return 1
+  fi
   runuser -u "$TARGET_USER" -- "$@"
 }
 
@@ -278,7 +382,15 @@ detect_target_user() {
     # 回退到UID 1000检测
     local detected
     detected=$(awk -F: "\$3 == $TARGET_USER_UID {print \$1}" /etc/passwd)
-    TARGET_USER="${detected:-$(read -p "Target user: " u && echo "$u")}"
+    if [ -z "$detected" ]; then
+      read -p "Target user: " TARGET_USER || TARGET_USER=""
+      if [ -z "$TARGET_USER" ]; then
+        error "Target user required"
+        return 1
+      fi
+    else
+      TARGET_USER="$detected"
+    fi
   fi
 
   HOME_DIR="/home/$TARGET_USER"

@@ -4,15 +4,26 @@
 # Bootstrap Script for Shorin Arch Setup
 # ==============================================================================
 
+set -Eeuo pipefail
+trap 'echo "Bootstrap failed. Check network or repo access."; exit 1' ERR
+
 # --- [配置区域] ---
 # 支持环境变量配置
 TARGET_BRANCH="${BRANCH:-main}"
-REPO_URL="https://github.com/SHORiN-KiWATA/shorin-arch-setup.git"
+REPO_URL="https://github.com/2048TB/shorin-arch-setup.git"
 DIR_NAME="shorin-arch-setup"
 
-# 导出用户配置（供install.sh使用）
+# 导出用户配置（供 scripts/install.sh 使用）
 export SHORIN_USERNAME="${SHORIN_USERNAME:-}"
 export SHORIN_PASSWORD="${SHORIN_PASSWORD:-}"
+export ROOT_PASSWORD_HASH="${ROOT_PASSWORD_HASH:-}"
+export DESKTOP_ENV="${DESKTOP_ENV:-}"
+export TARGET_DISK="${TARGET_DISK:-}"
+export BOOT_MODE="${BOOT_MODE:-}"
+export CONFIRM_DISK_WIPE="${CONFIRM_DISK_WIPE:-}"
+export SHORIN_CONFIG="${SHORIN_CONFIG:-}"
+export STRICT_MODE="${STRICT_MODE:-1}"
+export STRICT_MODE_ERR_TRAP="${STRICT_MODE_ERR_TRAP:-1}"
 export DEBUG="${DEBUG:-0}"
 export CN_MIRROR="${CN_MIRROR:-0}"
 
@@ -59,9 +70,9 @@ if [ -d "$DIR_NAME" ]; then
     
     # ISO环境下已是root，已安装系统需要sudo
     if [ "$EUID" -eq 0 ]; then
-        bash install.sh
+        bash scripts/install.sh
     else
-        sudo bash install.sh
+        sudo bash scripts/install.sh
     fi
 else
     echo "Error: Directory not found."

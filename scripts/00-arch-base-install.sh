@@ -9,9 +9,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/00-utils.sh"
 
+# --- Config & Strict Mode ---
+CONFIG_FILE="${SHORIN_CONFIG:-$PARENT_DIR/config.conf}"
+load_config
+enable_strict_mode
+
 # --- Constants ---
 readonly EFI_SIZE="512M"
+readonly BIOS_BOOT_SIZE="1M"
 readonly MIN_DISK_SIZE_GB=20
+readonly MIN_DISK_SIZE_BYTES=$((MIN_DISK_SIZE_GB * 1024 * 1024 * 1024))
 readonly PACSTRAP_BASE_PKGS="base base-devel linux linux-firmware btrfs-progs networkmanager grub efibootmgr sudo nano vim git wget curl"
 
 check_root
@@ -20,13 +27,6 @@ check_root
 # STEP 0: ISO Environment Detection
 # ==============================================================================
 section "Phase 0" "Environment Detection"
-
-is_iso_environment() {
-    # 多种检测方法确保准确
-    [ -d /run/archiso ] || \
-    [[ "$(findmnt / -o FSTYPE -n)" =~ ^(overlay|tmpfs|airootfs)$ ]] || \
-    [[ "$(hostname)" == "archiso" ]]
-}
 
 if ! is_iso_environment; then
     log "Not running in ISO environment. Skipping base installation."
@@ -44,43 +44,73 @@ echo ""
 section "Step 1/7" "Disk Selection"
 
 log "Scanning available disks..."
-lsblk -d -n -o NAME,SIZE,TYPE | grep disk
+lsblk -d -n -o NAME,SIZE,TYPE | grep disk || true
 
-# 自动选择最大磁盘
-LARGEST_DISK=$(lsblk -d -n -o NAME,SIZE -b | grep -v loop | sort -k2 -n -r | head -1 | awk '{print $1}')
-LARGEST_DISK_SIZE_GB=$(lsblk -d -n -o SIZE /dev/"$LARGEST_DISK" | sed 's/G//')
-
-if [ -z "$LARGEST_DISK" ]; then
-    error "No suitable disk found."
+TARGET_DISK="${TARGET_DISK:-}"
+if [ -z "$TARGET_DISK" ]; then
+    error "TARGET_DISK is required. Example: TARGET_DISK=/dev/nvme0n1"
     exit 1
 fi
 
-info_kv "Target Disk" "/dev/$LARGEST_DISK" "($LARGEST_DISK_SIZE_GB)"
+if [ ! -b "$TARGET_DISK" ]; then
+    error "TARGET_DISK is not a block device: $TARGET_DISK"
+    exit 1
+fi
+
+if [ "$(lsblk -no TYPE "$TARGET_DISK")" != "disk" ]; then
+    error "TARGET_DISK must be a disk (not a partition): $TARGET_DISK"
+    exit 1
+fi
+
+DISK_SIZE_BYTES=$(lsblk -d -n -o SIZE -b "$TARGET_DISK")
+DISK_SIZE_HUMAN=$(lsblk -d -n -o SIZE "$TARGET_DISK")
+
+info_kv "Target Disk" "$TARGET_DISK" "($DISK_SIZE_HUMAN)"
 
 # 安全检查：确认磁盘大小
-if [ "${LARGEST_DISK_SIZE_GB%%.*}" -lt "$MIN_DISK_SIZE_GB" ]; then
+if [ "$DISK_SIZE_BYTES" -lt "$MIN_DISK_SIZE_BYTES" ]; then
     error "Disk too small. Minimum ${MIN_DISK_SIZE_GB}GB required."
     exit 1
 fi
 
+# 检测启动模式（可用 BOOT_MODE 覆盖）
+BOOT_MODE="${BOOT_MODE:-}"
+if [ -z "$BOOT_MODE" ]; then
+    if [ -d /sys/firmware/efi ]; then
+        BOOT_MODE="uefi"
+    else
+        BOOT_MODE="bios"
+    fi
+fi
+BOOT_MODE="${BOOT_MODE,,}"
+if [ "$BOOT_MODE" != "uefi" ] && [ "$BOOT_MODE" != "bios" ]; then
+    error "Invalid BOOT_MODE: $BOOT_MODE (use uefi|bios)"
+    exit 1
+fi
+info_kv "Boot Mode" "$BOOT_MODE" "(auto/override)"
+
 # 警告确认
 echo ""
 echo -e "${H_RED}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_RED}║  WARNING: THIS WILL ERASE ALL DATA ON /dev/$LARGEST_DISK${NC}"
-echo -e "${H_RED}║  Disk: $(lsblk -d -n -o MODEL /dev/$LARGEST_DISK 2>/dev/null || echo 'Unknown')${NC}"
-echo -e "${H_RED}║  Size: $LARGEST_DISK_SIZE_GB${NC}"
+echo -e "${H_RED}║  WARNING: THIS WILL ERASE ALL DATA ON $TARGET_DISK${NC}"
+echo -e "${H_RED}║  Disk: $(lsblk -d -n -o MODEL "$TARGET_DISK" 2>/dev/null || echo 'Unknown')${NC}"
+echo -e "${H_RED}║  Size: $DISK_SIZE_HUMAN${NC}"
 echo -e "${H_RED}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-read -t 30 -p "$(echo -e "   ${H_YELLOW}Confirm to ERASE /dev/$LARGEST_DISK? [yes/NO]: ${NC}")" confirm
-confirm=${confirm:-NO}
+if [ "${CONFIRM_DISK_WIPE:-}" = "YES" ]; then
+    confirm="yes"
+else
+    if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Confirm to ERASE $TARGET_DISK? [yes/NO]: ${NC}")" confirm; then
+        confirm=""
+    fi
+    confirm=${confirm:-NO}
+fi
 
 if [ "$confirm" != "yes" ]; then
     error "Installation cancelled by user."
     exit 1
 fi
-
-TARGET_DISK="/dev/$LARGEST_DISK"
 
 # ==============================================================================
 # STEP 2: Partitioning
@@ -97,18 +127,26 @@ log "Creating GPT partition table..."
 exe sgdisk -Z "$TARGET_DISK"  # 清除分区表
 exe sgdisk -o "$TARGET_DISK"  # 创建GPT
 
-log "Creating EFI partition (${EFI_SIZE})..."
-exe sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:"EFI" "$TARGET_DISK"
+if [ "$BOOT_MODE" = "uefi" ]; then
+    log "Creating EFI partition (${EFI_SIZE})..."
+    exe sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:"EFI" "$TARGET_DISK"
 
-log "Creating Btrfs partition (remaining space)..."
-exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+    log "Creating Btrfs partition (remaining space)..."
+    exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+else
+    log "Creating BIOS boot partition (${BIOS_BOOT_SIZE})..."
+    exe sgdisk -n 1:0:+${BIOS_BOOT_SIZE} -t 1:ef02 -c 1:"BIOS" "$TARGET_DISK"
+
+    log "Creating Btrfs partition (remaining space)..."
+    exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+fi
 
 # 通知内核重新读取分区表
 exe partprobe "$TARGET_DISK"
 sleep 2
 
-# 分区设备名（处理nvme和sata差异）
-if [[ "$TARGET_DISK" =~ nvme ]]; then
+# 分区设备名（处理nvme、mmcblk和sata差异）
+if [[ "$TARGET_DISK" =~ (nvme|mmcblk) ]]; then
     EFI_PART="${TARGET_DISK}p1"
     ROOT_PART="${TARGET_DISK}p2"
 else
@@ -116,7 +154,9 @@ else
     ROOT_PART="${TARGET_DISK}2"
 fi
 
-info_kv "EFI Partition" "$EFI_PART"
+if [ "$BOOT_MODE" = "uefi" ]; then
+    info_kv "EFI Partition" "$EFI_PART"
+fi
 info_kv "Root Partition" "$ROOT_PART"
 
 # ==============================================================================
@@ -124,8 +164,10 @@ info_kv "Root Partition" "$ROOT_PART"
 # ==============================================================================
 section "Step 3/7" "Formatting"
 
-log "Formatting EFI partition (FAT32)..."
-exe mkfs.fat -F32 "$EFI_PART"
+if [ "$BOOT_MODE" = "uefi" ]; then
+    log "Formatting EFI partition (FAT32)..."
+    exe mkfs.fat -F32 "$EFI_PART"
+fi
 
 log "Formatting Root partition (Btrfs)..."
 exe mkfs.btrfs -f -L "ArchRoot" "$ROOT_PART"
@@ -160,8 +202,10 @@ exe mount -o "subvol=@snapshots,$BTRFS_OPTS" "$ROOT_PART" /mnt/.snapshots
 exe mount -o "subvol=@log,$BTRFS_OPTS" "$ROOT_PART" /mnt/var/log
 exe mount -o "subvol=@cache,$BTRFS_OPTS" "$ROOT_PART" /mnt/var/cache
 
-log "Mounting EFI partition..."
-exe mount "$EFI_PART" /mnt/boot
+if [ "$BOOT_MODE" = "uefi" ]; then
+    log "Mounting EFI partition..."
+    exe mount "$EFI_PART" /mnt/boot
+fi
 
 success "Btrfs layout configured."
 lsblk "$TARGET_DISK"
@@ -185,7 +229,7 @@ fi
 section "Step 6/7" "Generating fstab"
 
 log "Generating fstab with UUIDs..."
-exe genfstab -U /mnt >> /mnt/etc/fstab
+exe genfstab -U /mnt > /mnt/etc/fstab
 
 log "Verifying fstab..."
 cat /mnt/etc/fstab
@@ -199,36 +243,100 @@ log "Copying installer to /mnt/root..."
 exe cp -r "$PARENT_DIR" /mnt/root/
 
 log "Creating chroot continuation script..."
+{
+    printf 'TARGET_DISK=%q\n' "$TARGET_DISK"
+    printf 'BOOT_MODE=%q\n' "$BOOT_MODE"
+    [ -n "${ROOT_PASSWORD_HASH:-}" ] && printf 'ROOT_PASSWORD_HASH=%q\n' "$ROOT_PASSWORD_HASH"
+    [ -n "${SHORIN_USERNAME:-}" ] && printf 'SHORIN_USERNAME=%q\n' "$SHORIN_USERNAME"
+    [ -n "${SHORIN_PASSWORD:-}" ] && printf 'SHORIN_PASSWORD=%q\n' "$SHORIN_PASSWORD"
+    [ -n "${DESKTOP_ENV:-}" ] && printf 'DESKTOP_ENV=%q\n' "$DESKTOP_ENV"
+    [ -n "${CONFIRM_DISK_WIPE:-}" ] && printf 'CONFIRM_DISK_WIPE=%q\n' "$CONFIRM_DISK_WIPE"
+    [ -n "${CN_MIRROR:-}" ] && printf 'CN_MIRROR=%q\n' "$CN_MIRROR"
+    [ -n "${DEBUG:-}" ] && printf 'DEBUG=%q\n' "$DEBUG"
+} > /mnt/root/shorin-install.env
+
 cat > /mnt/root/continue-install.sh << 'CHROOT_EOF'
 #!/bin/bash
 
+set -Eeuo pipefail
+
+# 加载安装环境变量与配置
+if [ -f /root/shorin-install.env ]; then
+  # shellcheck source=/dev/null
+  source /root/shorin-install.env
+fi
+if [ -f /root/shorin-arch-setup/config.conf ]; then
+  # shellcheck source=/dev/null
+  source /root/shorin-arch-setup/config.conf
+fi
+
 # 设置环境变量（防止重复运行基础安装）
 export SKIP_BASE_INSTALL=1
+export SHORIN_USERNAME="${SHORIN_USERNAME:-}"
+export SHORIN_PASSWORD="${SHORIN_PASSWORD:-}"
+export DESKTOP_ENV="${DESKTOP_ENV:-}"
+export CN_MIRROR="${CN_MIRROR:-0}"
+export DEBUG="${DEBUG:-0}"
 
 # 基础配置
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+TIMEZONE="${TIMEZONE:-Asia/Shanghai}"
+HOSTNAME="${HOSTNAME:-shorin-arch}"
+LOCALE="${LOCALE:-en_US.UTF-8}"
+EXTRA_LOCALES="${EXTRA_LOCALES:-zh_CN.UTF-8}"
+
+ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
 hwclock --systohc
 
 # Locale
-echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-echo "zh_CN.UTF-8 UTF-8" >> /etc/locale.gen
+for loc in "$LOCALE" $EXTRA_LOCALES; do
+  if ! grep -q -E "^${loc} UTF-8" /etc/locale.gen; then
+    sed -i "s/^#\s*${loc} UTF-8/${loc} UTF-8/" /etc/locale.gen
+    if ! grep -q -E "^${loc} UTF-8" /etc/locale.gen; then
+      echo "${loc} UTF-8" >> /etc/locale.gen
+    fi
+  fi
+done
 locale-gen
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
+echo "LANG=${LOCALE}" > /etc/locale.conf
 
 # Hostname
-echo "shorin-arch" > /etc/hostname
+echo "${HOSTNAME}" > /etc/hostname
 cat > /etc/hosts << EOF
 127.0.0.1   localhost
 ::1         localhost
-127.0.1.1   shorin-arch.localdomain shorin-arch
+127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
 EOF
 
 # 启用NetworkManager
 systemctl enable NetworkManager
 
 # GRUB安装
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
+if [ "${BOOT_MODE}" = "bios" ]; then
+  if ! grub-install --target=i386-pc "${TARGET_DISK}"; then
+    echo "ERROR: GRUB BIOS installation failed"
+    exit 1
+  fi
+else
+  if ! grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB; then
+    echo "ERROR: GRUB UEFI installation failed"
+    exit 1
+  fi
+fi
+
+# Root 密码（无人值守）
+if [ -n "${ROOT_PASSWORD_HASH:-}" ]; then
+  if [[ "$ROOT_PASSWORD_HASH" =~ ^\$[0-9]+\$ ]]; then
+    if ! echo "root:${ROOT_PASSWORD_HASH}" | chpasswd -e; then
+      echo "ERROR: Failed to set root password"
+      exit 1
+    fi
+  else
+    echo "ERROR: Invalid ROOT_PASSWORD_HASH format (expected \$id\$...)"
+    exit 1
+  fi
+else
+  passwd
+fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -239,7 +347,7 @@ echo ""
 # 运行Shorin安装器（跳过ISO安装模块）
 cd /root/shorin-arch-setup
 export SKIP_BASE_INSTALL=1  # 标记已完成基础安装
-bash install.sh
+bash scripts/install.sh
 CHROOT_EOF
 
 chmod +x /mnt/root/continue-install.sh
@@ -256,11 +364,6 @@ echo ""
 
 log "Entering arch-chroot..."
 sleep 2
-
-# 重要：在chroot前设置root密码
-echo ""
-echo -e "${H_YELLOW}>>> Please set ROOT password for the new system:${NC}"
-arch-chroot /mnt passwd
 
 # 执行chroot内的继续脚本
 if arch-chroot /mnt /root/continue-install.sh; then

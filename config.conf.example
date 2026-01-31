@@ -1,0 +1,30 @@
+# Example config for unattended installs
+# Copy to config.conf or pass via SHORIN_CONFIG=/path/to/config.conf
+
+# Disk & boot
+TARGET_DISK=/dev/nvme0n1
+CONFIRM_DISK_WIPE=YES
+# BOOT_MODE=uefi  # auto-detect if unset (uefi|bios)
+
+# Desktop & user
+DESKTOP_ENV=niri  # niri|gnome|none
+SHORIN_USERNAME="youruser"
+SHORIN_PASSWORD="yourpassword"
+# Use a password hash for root (recommended for unattended)
+ROOT_PASSWORD_HASH='$6$yourhash$...'
+
+# Locale & timezone
+TIMEZONE=Asia/Shanghai
+HOSTNAME=shorin-arch
+LOCALE=en_US.UTF-8
+EXTRA_LOCALES="zh_CN.UTF-8"
+# Force locale-gen on existing systems
+FORCE_LOCALE_GEN=0
+
+# Mirrors & debug
+CN_MIRROR=0
+DEBUG=0
+
+# Strict mode (1=on, 0=off)
+STRICT_MODE=1
+STRICT_MODE_ERR_TRAP=1

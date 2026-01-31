@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**最后更新**: 2026-02-01 | **版本**: v2.1
+
 ## 项目概述
 
 Shorin Arch Setup - Arch Linux 自动化安装系统，支持 **Arch ISO环境全自动安装** 和 **已安装系统配置**。提供 Niri（滚动平铺WM）和 GNOME（现代桌面）双桌面选择。采用模块化bash脚本架构，包含智能环境检测、自动分区、状态管理、快照恢复、交互式TUI界面、自动配置部署。
@@ -10,41 +12,41 @@ Shorin Arch Setup - Arch Linux 自动化安装系统，支持 **Arch ISO环境�
 - ✅ 自动检测ISO环境 vs 已安装系统
 - ✅ ISO模式：全自动分区（GPT+Btrfs）+ pacstrap + chroot
 - ✅ 已安装模式：跳过基础安装，直接配置桌面
-- ✅ 一键命令：`bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)`
+- ✅ 一键命令：`bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)`
 
 ## 核心架构
 
 ### 执行流程
 ```
 [ISO环境]
-strap.sh (Bootstrap)
-  └─> install.sh (Environment Detection)
+scripts/strap.sh (Bootstrap)
+  └─> scripts/install.sh (Environment Detection)
        ├─> is_iso_environment() → true
        └─> 00-arch-base-install.sh (Partition + Pacstrap)
             └─> arch-chroot /mnt
                  └─> continue-install.sh
-                      └─> install.sh (SKIP_BASE_INSTALL=1)
+                      └─> scripts/install.sh (SKIP_BASE_INSTALL=1)
                            ├─> 00-utils.sh (Tools)
-                           └─> scripts/*.sh (Modules)
+                           └─> modules.sh (Modules)
 
 [已安装系统]
-strap.sh (Bootstrap)
-  └─> install.sh (Environment Detection)
+scripts/strap.sh (Bootstrap)
+  └─> scripts/install.sh (Environment Detection)
        ├─> is_iso_environment() → false
        ├─> 00-utils.sh (TUI Engine + Helper Functions)
-       └─> scripts/*.sh (Modular Installation Steps)
+       └─> modules.sh (Modular Installation Steps)
 ```
 
 ### 关键组件
 
-**install.sh** - 主控制器
+**scripts/install.sh** - 主控制器
 - 桌面环境选择菜单（3种选项：None/Niri/GNOME）
 - 状态文件管理（`.install_progress`）
 - 模块动态加载（根据DESKTOP_ENV变量）
 - Reflector镜像优化（带时区检测）
 - 全局清理与快照管理
 
-**00-utils.sh** - TUI可视化引擎 + 工具函数库
+**00-utils.sh** - TUI可视化引擎 + 工具函数库（可重复 source，但 modules.sh 顶部已统一加载一次）
 - ANSI颜色系统（H_RED, H_GREEN等）
 - 日志函数（`log`, `success`, `warn`, `error`）
 - `exe()` - 命令执行封装（带可视化输出）
@@ -59,7 +61,7 @@ strap.sh (Bootstrap)
 
 **00-arch-base-install.sh** - [ISO模式专用] 基础系统安装
 - ISO环境检测（/run/archiso, findmnt, hostname）
-- 自动磁盘选择（lsblk检测最大盘）
+- 显式目标磁盘（TARGET_DISK 必填）
 - GPT分区（EFI 512M + Btrfs）
 - Btrfs子卷创建（@, @home, @snapshots, @log, @cache）
 - pacstrap基础系统安装
@@ -67,7 +69,7 @@ strap.sh (Bootstrap)
 - arch-chroot + continue-install.sh桥接
 - GRUB引导安装
 
-**模块执行顺序** (BASE_MODULES数组)
+**模块执行顺序** (modules.sh 内部模块ID；不再是独立文件)
 ```
 00-arch-base-install.sh → [ISO模式] 分区+pacstrap+基础配置（仅ISO环境）
 00-btrfs-init.sh      → Btrfs/快照初始化
@@ -97,16 +99,16 @@ strap.sh (Bootstrap)
 
 ### 桌面环境模块
 
-**Niri (04-niri-setup.sh)**
+**Niri (module: 04-niri-setup.sh)**
 - 核心组件：niri, fuzzel, libnotify, mako, polkit-gnome
 - 默认终端：ghostty（GPU加速）
 - 文件管理器：Nautilus + Thunar（双重支持）
 - Dotfiles部署：从本地`niri-dotfiles/`复制到用户目录
 - 配置内容：niri/waybar/fuzzel/mako/hyprlock/wlogout/matugen等
-- 错误恢复：`critical_failure_handler` + `niri-undochange.sh`
+- 错误恢复：`critical_failure_handler` + `scripts/install.sh rollback`
 - 包安装重试：`ensure_package_installed()` - 3次重试机制
 
-**GNOME (04d-gnome.sh)**
+**GNOME (module: 04d-gnome.sh)**
 - 核心组件：gnome-shell, gdm, nautilus
 - Dotfiles从`gnome-dotfiles/`复制
 - 扩展：blur-my-shell, tilingshell, user-theme
@@ -117,9 +119,9 @@ strap.sh (Bootstrap)
 
 ### 常量定义
 所有脚本使用`readonly`定义常量，消除魔数：
-- **install.sh**: 8个常量（超时、退出码、UID等）
-- **00-utils.sh**: 3个常量（FLATHUB_SELECTION_TIMEOUT等）
-- **04-niri-setup.sh**: 4个常量（重试次数、超时等）
+- **scripts/install.sh**: 7个常量（超时、退出码等）
+- **00-utils.sh**: 3个常量（FLATHUB_SELECTION_TIMEOUT, LOG_FILE_PERMISSIONS, TARGET_USER_UID）
+- **00-arch-base-install.sh**: 5个常量（分区大小、最小磁盘等）
 
 ### 函数规范
 - 函数长度≤50行（已拆分超长函数）
@@ -138,13 +140,13 @@ strap.sh (Bootstrap)
 ### 测试脚本模块
 ```bash
 # 单独测试某个模块(需root)
-sudo bash scripts/01-base.sh
+sudo bash scripts/modules.sh 01-base.sh
 
 # 启用调试模式
-DEBUG=1 sudo bash install.sh
+DEBUG=1 sudo bash scripts/install.sh
 
 # 强制CN镜像
-CN_MIRROR=1 sudo bash install.sh
+CN_MIRROR=1 sudo bash scripts/install.sh
 
 # 测试ISO基础安装（虚拟机推荐）
 # 注意：会擦除磁盘，仅在测试环境运行
@@ -207,7 +209,7 @@ flatpak:app.id                           # Flatpak包
 - 使用`#!/bin/bash`(非sh)
 - 变量使用大写(SCRIPT_DIR, TARGET_USER)
 - 函数使用snake_case
-- 始终source `00-utils.sh`获取工具函数
+- 独立脚本需 source `00-utils.sh`；modules.sh 内部模块不要重复 source
 - 使用`exe`包装关键命令以获得可视化输出
 
 ### TUI视觉规范
@@ -247,7 +249,7 @@ flatpak:app.id                           # Flatpak包
 - 桌面环境前创建"Before Desktop Environments"
 - 清理函数仅删除pre/post类型,保留single类型(用户手动快照)
 
-### 应用安装（99-apps.sh）
+### 应用安装（module 99-apps.sh）
 
 **安装方式：**
 - FZF交互式选择（支持全选/多选/搜索）
@@ -263,6 +265,29 @@ flatpak:app.id                           # Flatpak包
 **已安装检测：**
 - 跳过已安装的包（pacman -Qi检测）
 - 失败包记录到`~/Documents/安装失败的软件.txt`
+
+### 安全性与错误处理（v2.1增强）
+
+**Strict Mode保护：**
+- 所有脚本启用 `set -Eeuo pipefail`
+- read命令失败时安全退出（不使用命令替换内的read）
+- 可通过 `STRICT_MODE=0` 禁用
+
+**输入验证：**
+- TARGET_DISK 必填检查（ISO模式）
+- ROOT_PASSWORD_HASH 格式验证（`$id$...`）
+- 磁盘大小检查（最小20GB）
+- 设备类型检查（mmcblk、nvme、sata自动识别）
+
+**错误恢复：**
+- GRUB安装失败立即退出并提示
+- 模块执行失败显示重试命令
+- chpasswd失败显示详细错误信息
+
+**密码安全：**
+- 使用 `printf '%s:%s\n'` 避免特殊字符问题
+- chroot环境变量安全传递（`printf %q`）
+- 密码哈希格式验证
 
 ## 核心技术特性
 
@@ -296,7 +321,7 @@ flatpak:app.id                           # Flatpak包
 ### Btrfs快照策略
 
 **自动快照点：**
-- `Before Shorin Setup` - 安装开始（00-btrfs-init.sh）
+- `Before Shorin Setup` - 安装开始（module 00-btrfs-init.sh）
 - `Before Desktop Environments` - 桌面前（03c-snapshot-before-desktop.sh）
 
 **快照清理：**
@@ -305,15 +330,14 @@ flatpak:app.id                           # Flatpak包
 - 使用snapper delete批量清理
 
 **回滚工具：**
-- `undochange.sh` - 一键回滚到安装前（根目录）
-- `scripts/niri-undochange.sh` - Niri安装失败回滚
+- `sudo bash scripts/install.sh rollback` - 一键回滚到安装前
 
 ## Bootstrap部署
 
 **一键安装（ISO环境支持）**
 ```bash
 # 通用命令（自动检测环境）
-bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 
 # ISO环境执行流程:
 # 1. 自动分区（GPT + Btrfs子卷）
@@ -329,36 +353,49 @@ bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/s
 
 **手动克隆**
 ```bash
-git clone https://github.com/YOUR_USERNAME/shorin-arch-setup.git
+git clone https://github.com/2048TB/shorin-arch-setup.git
 cd shorin-arch-setup
-sudo bash install.sh
+sudo bash scripts/install.sh
 ```
 
 **指定分支**
 ```bash
-BRANCH=dev bash strap.sh
+BRANCH=dev bash scripts/strap.sh
 ```
 
 **环境变量**
 ```bash
 # 零交互模式（预设用户名密码）
-SHORIN_USERNAME="user" SHORIN_PASSWORD="pass" bash install.sh
+SHORIN_USERNAME="user" SHORIN_PASSWORD="pass" bash scripts/install.sh
 
 # ISO零交互完整示例（推荐）
 SHORIN_USERNAME="shorin" SHORIN_PASSWORD="Secure123!" CN_MIRROR=1 \
-  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+  bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 
 # 调试模式
-DEBUG=1 sudo bash install.sh
+DEBUG=1 sudo bash scripts/install.sh
 
 # 强制中国镜像
-CN_MIRROR=1 sudo bash install.sh
+CN_MIRROR=1 sudo bash scripts/install.sh
 ```
 
 **变量说明：**
+
+*ISO环境专用：*
+- `TARGET_DISK`: 目标磁盘（必填，例：/dev/nvme0n1）
+- `CONFIRM_DISK_WIPE`: 跳过确认（YES 表示跳过）
+- `ROOT_PASSWORD_HASH`: Root密码哈希（生成：`openssl passwd -6 "password"`）
+- `BOOT_MODE`: 启动模式（uefi/bios，默认自动检测）
+
+*通用参数：*
 - `SHORIN_USERNAME`: 预设用户名（跳过交互输入）
 - `SHORIN_PASSWORD`: 预设密码（跳过交互输入）
-- 用户自动添加到wheel组并配置sudoers（sudo权限）
-- `DEBUG`: 调试模式（0/1）
+- `DESKTOP_ENV`: 桌面环境（niri/gnome/none）
 - `CN_MIRROR`: 强制中国镜像（0/1）
+- `DEBUG`: 调试模式（0/1）
+
+*已安装系统专用：*
+- `FORCE_LOCALE_GEN`: 强制 locale-gen（0/1）
 - `BRANCH`: Git分支选择（main/dev）
+
+用户自动添加到wheel组并配置sudo权限。
