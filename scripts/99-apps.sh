@@ -12,6 +12,9 @@ source "$SCRIPT_DIR/00-utils.sh"
 # LazyVim 硬性依赖列表 (Moved from niri-setup)
 LAZYVIM_DEPS=("neovim" "ripgrep" "fd" "ttf-jetbrains-mono-nerd" "git")
 
+# --- Constants ---
+readonly APPS_SELECTION_TIMEOUT=60
+
 check_root
 
 # Ensure FZF is installed
@@ -60,10 +63,10 @@ echo -e "   Selected List: ${BOLD}$LIST_FILENAME${NC}"
 echo -e "   ${H_YELLOW}>>> Do you want to install common applications?${NC}"
 echo -e "   ${H_CYAN}    [ENTER] = Select packages${NC}"
 echo -e "   ${H_CYAN}    [N]     = Skip installation${NC}"
-echo -e "   ${H_YELLOW}    [Timeout 60s] = Auto-install ALL default packages (No FZF)${NC}"
+echo -e "   ${H_YELLOW}    [Timeout ${APPS_SELECTION_TIMEOUT}s] = Auto-install ALL default packages (No FZF)${NC}"
 echo ""
 
-read -t 60 -p "   Please select [Y/n]: " choice
+read -t "$APPS_SELECTION_TIMEOUT" -p "   Please select [Y/n]: " choice
 READ_STATUS=$?
 
 SELECTED_RAW=""
@@ -71,7 +74,7 @@ SELECTED_RAW=""
 # Case 1: Timeout (Auto Install ALL)
 if [ $READ_STATUS -ne 0 ]; then
     echo "" 
-    warn "Timeout reached (60s). Auto-installing ALL applications from list..."
+    warn "Timeout reached (${APPS_SELECTION_TIMEOUT}s). Auto-installing ALL applications from list..."
     SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/[[:space:]]+#/\t#/')
 
 # Case 2: User Input
@@ -85,30 +88,7 @@ else
         clear
         echo -e "\n  Loading application list..."
         
-        SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | \
-            sed -E 's/[[:space:]]+#/\t#/' | \
-            fzf --multi \
-                --layout=reverse \
-                --border \
-                --margin=1,2 \
-                --prompt="Search App > " \
-                --pointer=">>" \
-                --marker="* " \
-                --delimiter=$'\t' \
-                --with-nth=1 \
-                --bind 'load:select-all' \
-                --bind 'ctrl-a:select-all,ctrl-d:deselect-all' \
-                --info=inline \
-                --header="[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL" \
-                --preview "echo {} | cut -f2 -d$'\t' | sed 's/^# //'" \
-                --preview-window=right:45%:wrap:border-left \
-                --color=dark \
-                --color=fg+:white,bg+:black \
-                --color=hl:blue,hl+:blue:bold \
-                --color=header:yellow:bold \
-                --color=info:magenta \
-                --color=prompt:cyan,pointer:cyan:bold,marker:green:bold \
-                --color=spinner:yellow)
+        SELECTED_RAW=$(fzf_select_apps "$LIST_FILE")
         
         clear
         
@@ -170,7 +150,7 @@ if [ ${#REPO_APPS[@]} -gt 0 ]; then
     
     REPO_QUEUE=()
     for pkg in "${REPO_APPS[@]}"; do
-        if pacman -Qi "$pkg" &>/dev/null; then
+        if is_package_installed "$pkg"; then
             log "Skipping '$pkg' (Already installed)."
         else
             REPO_QUEUE+=("$pkg")
@@ -199,7 +179,7 @@ if [ ${#AUR_APPS[@]} -gt 0 ]; then
     section "Step 2/3" "AUR Packages "
     
     for app in "${AUR_APPS[@]}"; do
-        if pacman -Qi "$app" &>/dev/null; then
+        if is_package_installed "$app"; then
             log "Skipping '$app' (Already installed)."
             continue
         fi
@@ -214,7 +194,7 @@ if [ ${#AUR_APPS[@]} -gt 0 ]; then
                 warn "Retry $i/$max_retries for '$app' ..."
             fi
             
-            if as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "$app"; then
+            if install_yay_package "$app"; then
                 install_success=true
                 success "Installed $app"
                 break
@@ -256,7 +236,7 @@ fi
 section "Post-Install" "System & App Tweaks"
 
 # --- [NEW] Virtualization Configuration (Virt-Manager) ---
-if pacman -Qi virt-manager &>/dev/null && ! systemd-detect-virt -q; then
+if is_package_installed virt-manager && ! systemd-detect-virt -q; then
   info_kv "Config" "Virt-Manager detected"
   
   # 1. 安装完整依赖

@@ -16,6 +16,16 @@ else
     exit 1
 fi
 
+# --- Constants ---
+readonly DESKTOP_SELECTION_TIMEOUT=120
+readonly REFLECTOR_TIMEOUT=60
+readonly REBOOT_COUNTDOWN_SECONDS=10
+readonly REFLECTOR_AGE_HOURS=24
+readonly REFLECTOR_TOP_MIRRORS=10
+readonly TARGET_USER_UID=1000
+readonly EXIT_CODE_INTERRUPTED=130
+readonly EXIT_CODE_TIMEOUT=1
+
 # --- Global Cleanup on Exit ---
 cleanup_on_exit() {
     tput cnorm
@@ -108,7 +118,7 @@ select_desktop() {
     
     # 3. 输入处理
     echo -e "   ${DIM}Waiting for input (Timeout: 2 mins)...${NC}"
-    read -t 120 -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice
+    read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice
     
     if [ -z "$choice" ]; then
         echo -e "\n${H_RED}Timeout or no selection.${NC}"
@@ -149,6 +159,32 @@ sys_dashboard() {
 }
 
 # --- Main Execution ---
+
+# --- ISO Environment Check ---
+is_iso_environment() {
+    [ -d /run/archiso ] || \
+    [[ "$(findmnt / -o FSTYPE -n 2>/dev/null)" =~ ^(overlay|tmpfs|airootfs)$ ]] || \
+    [[ "$(hostname)" == "archiso" ]]
+}
+
+# 如果在ISO环境，先运行基础安装模块
+if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
+    section "ISO Mode" "Base System Installation Required"
+    log "Running base installation module..."
+    
+    BASE_INSTALL_SCRIPT="$SCRIPTS_DIR/00-arch-base-install.sh"
+    if [ -f "$BASE_INSTALL_SCRIPT" ]; then
+        bash "$BASE_INSTALL_SCRIPT"
+        
+        # 基础安装完成后，脚本会在chroot内重新调用install.sh
+        # 此时SKIP_BASE_INSTALL=1，不会再次进入这个分支
+        exit 0
+    else
+        error "ISO detected but base installation script missing: $BASE_INSTALL_SCRIPT"
+        warn "Please install Arch Linux manually first, then run this script."
+        exit 1
+    fi
+fi
 
 select_desktop
 clear
@@ -205,7 +241,7 @@ else
     exe pacman -S --noconfirm --needed reflector
 
     CURRENT_TZ=$(readlink -f /etc/localtime)
-    REFLECTOR_ARGS="-a 24 -f 10 --sort score --save /etc/pacman.d/mirrorlist --verbose"
+    REFLECTOR_ARGS="-a $REFLECTOR_AGE_HOURS -f $REFLECTOR_TOP_MIRRORS --sort score --save /etc/pacman.d/mirrorlist --verbose"
 
     if [[ "$CURRENT_TZ" == *"Shanghai"* ]]; then
         echo ""
@@ -216,7 +252,7 @@ else
         echo -e "${H_YELLOW}╚══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         
-        read -t 60 -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in 60s): ${NC}")" choice
+        read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in ${REFLECTOR_TIMEOUT}s): ${NC}")" choice
         if [ $? -ne 0 ]; then echo ""; fi
         choice=${choice:-N}
         
@@ -297,11 +333,11 @@ for module in "${MODULES[@]}"; do
         # Only record success
         echo "$module" >> "$STATE_FILE"
         success "Module $module completed."
-    elif [ $exit_code -eq 130 ]; then
+    elif [ $exit_code -eq $EXIT_CODE_INTERRUPTED ]; then
         echo ""
         warn "Script interrupted by user (Ctrl+C)."
         log "Exiting without rollback. You can resume later."
-        exit 130
+        exit $EXIT_CODE_INTERRUPTED
     else
         # Failure logic: do NOT write to STATE_FILE
         write_log "FATAL" "Module $module failed with exit code $exit_code"
@@ -316,11 +352,71 @@ done
 section "Completion" "System Cleanup"
 
 # --- 1. Snapshot Cleanup Logic ---
+
+# Get snapshot IDs to keep (protected markers)
+get_protected_snapshot_ids() {
+    local config_name="$1"
+    shift
+    local keep_markers=("$@")
+    local ids=()
+    
+    for marker in "${keep_markers[@]}"; do
+        local found_id
+        found_id=$(snapper -c "$config_name" list --columns number,description | grep -F "$marker" | awk '{print $1}' | tail -n 1)
+        
+        if [ -n "$found_id" ]; then
+            ids+=("$found_id")
+            log "Found protected snapshot: '$marker' (ID: $found_id)"
+        fi
+    done
+    
+    echo "${ids[@]}"
+}
+
+# Check if snapshot ID is in protected list
+is_snapshot_protected() {
+    local id="$1"
+    shift
+    local protected_ids=("$@")
+    
+    for keep in "${protected_ids[@]}"; do
+        if [[ "$id" == "$keep" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Collect snapshots to delete
+collect_snapshots_to_delete() {
+    local config_name="$1"
+    local start_id="$2"
+    shift 2
+    local protected_ids=("$@")
+    local snapshots=()
+    
+    while IFS= read -r line; do
+        local id type
+        id=$(echo "$line" | awk '{print $1}')
+        type=$(echo "$line" | awk '{print $3}')
+
+        if [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -gt "$start_id" ]; then
+            if ! is_snapshot_protected "$id" "${protected_ids[@]}"; then
+                if [[ "$type" == "pre" || "$type" == "post" ]]; then
+                    snapshots+=("$id")
+                fi
+            fi
+        fi
+    done < <(snapper -c "$config_name" list --columns number,type)
+    
+    echo "${snapshots[@]}"
+}
+
+# Main cleanup function
 clean_intermediate_snapshots() {
     local config_name="$1"
     local start_marker="Before Shorin Setup"
-    
-    local KEEP_MARKERS=(
+    local keep_markers=(
         "Before Desktop Environments"
         "Before Niri Setup"
     )
@@ -331,7 +427,6 @@ clean_intermediate_snapshots() {
 
     log "Scanning junk snapshots in: $config_name..."
 
-    # 1. 获取起始点 ID
     local start_id
     start_id=$(snapper -c "$config_name" list --columns number,description | grep -F "$start_marker" | awk '{print $1}' | tail -n 1)
 
@@ -340,57 +435,12 @@ clean_intermediate_snapshots() {
         return
     fi
 
-    # 2. 解析白名单 (IDS_TO_KEEP)
-    local IDS_TO_KEEP=()
-    for marker in "${KEEP_MARKERS[@]}"; do
-        local found_id
-        found_id=$(snapper -c "$config_name" list --columns number,description | grep -F "$marker" | awk '{print $1}' | tail -n 1)
-        
-        if [ -n "$found_id" ]; then
-            IDS_TO_KEEP+=("$found_id")
-            log "Found protected snapshot: '$marker' (ID: $found_id)"
-        fi
-    done
-
-    local snapshots_to_delete=()
+    local protected_ids
+    protected_ids=($(get_protected_snapshot_ids "$config_name" "${keep_markers[@]}"))
     
-    # 3. 扫描并筛选需要删除的快照
-    while IFS= read -r line; do
-        local id
-        local type
-        
-        # Snapper 表格输出通常为: " 100 | pre    | ..."
-        # awk $1=number, $2=|, $3=type
-        id=$(echo "$line" | awk '{print $1}')
-        type=$(echo "$line" | awk '{print $3}')
+    local snapshots_to_delete
+    snapshots_to_delete=($(collect_snapshots_to_delete "$config_name" "$start_id" "${protected_ids[@]}"))
 
-        if [[ "$id" =~ ^[0-9]+$ ]]; then
-            if [ "$id" -gt "$start_id" ]; then
-                
-                # --- 白名单检查 ---
-                local skip=false
-                for keep in "${IDS_TO_KEEP[@]}"; do
-                    if [[ "$id" == "$keep" ]]; then
-                        skip=true
-                        break
-                    fi
-                done
-                
-                if [ "$skip" = true ]; then
-                    continue
-                fi
-                # -----------------
-
-                # [修改重点] 仅删除 pre 和 post 类型的快照
-                # 去掉了 || "$type" == "single" 以保护用户手动创建的快照
-                if [[ "$type" == "pre" || "$type" == "post" ]]; then
-                    snapshots_to_delete+=("$id")
-                fi
-            fi
-        fi
-    done < <(snapper -c "$config_name" list --columns number,type)
-
-    # 4. 执行删除
     if [ ${#snapshots_to_delete[@]} -gt 0 ]; then
         log "Deleting ${#snapshots_to_delete[@]} junk snapshots in '$config_name'..."
         if exe snapper -c "$config_name" delete "${snapshots_to_delete[@]}"; then
@@ -409,7 +459,7 @@ clean_intermediate_snapshots "home"
 
 
 # Detect user ID 1000 or prompt manually
-DETECTED_USER=$(awk -F: '$3 == 1000 {print $1}' /etc/passwd)
+DETECTED_USER=$(awk -F: "\$3 == $TARGET_USER_UID {print \$1}" /etc/passwd)
 TARGET_USER="${DETECTED_USER:-$(read -p "Target user: " u && echo $u)}"
 HOME_DIR="/home/$TARGET_USER"
 # --- 3. Remove Installer Files ---
@@ -471,7 +521,7 @@ echo -e "${H_YELLOW}>>> System requires a REBOOT.${NC}"
 
 while read -r -t 0; do read -r; done
 
-for i in {10..1}; do
+for i in $(seq $REBOOT_COUNTDOWN_SECONDS -1 1); do
     echo -ne "\r   ${DIM}Auto-rebooting in ${i}s... (Press 'n' to cancel)${NC}"
     
     read -t 1 -n 1 input

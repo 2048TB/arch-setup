@@ -1,9 +1,10 @@
 # Shorin Arch Setup
 
-Arch Linux 自动化安装脚本 - 快速部署 Niri/GNOME 桌面环境
+Arch Linux 全自动安装系统 - 从ISO到桌面的一键部署
 
 ## ✨ 特性
 
+- 🆕 **ISO环境支持** - 从Arch ISO直接安装，自动分区+基础系统+桌面配置
 - 🎯 **模块化设计** - 独立脚本模块，可单独运行或恢复
 - 🔄 **状态管理** - 断点续传，失败自动恢复
 - 🎨 **多桌面支持** - Niri（滚动平铺）/ GNOME（现代桌面）
@@ -11,32 +12,51 @@ Arch Linux 自动化安装脚本 - 快速部署 Niri/GNOME 桌面环境
 - 🌏 **智能镜像** - 自动检测地区优化下载源
 - ⚡ **GPU自适应** - 自动检测并安装AMD/Intel/NVIDIA驱动
 - 📦 **完整工具链** - 开发环境（7种语言）+ 游戏优化 + 现代CLI工具
+- 💯 **高质量代码** - 无魔数、函数≤50行、代码零重复
 
 ## 🚀 快速开始
 
-### 方法1：一键安装（推荐）
+### 🆕 一键安装（支持ISO环境）
 
+**场景1: Arch ISO全新安装**
 ```bash
+# 1. 启动Arch ISO，连接网络
+iwctl  # WiFi配置
+
+# 2. 运行一键安装（自动分区+完整部署）
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+
+# ✨ 自动完成：
+#   - 自动分区（EFI + Btrfs）
+#   - pacstrap基础系统
+#   - GRUB引导安装
+#   - 桌面环境配置
+#   - 应用安装
+#   - 重启进入新系统
+```
+
+**场景2: 已安装Arch系统**
+```bash
+# 仅配置桌面环境和应用（跳过分区）
 bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
 ```
 
-### 方法2：手动克隆
+### 方法2：手动克隆（已安装系统）
 
 ```bash
-# 安装git并克隆仓库
-sudo pacman -Syu git
+# 1. 克隆仓库
 git clone https://github.com/2048TB/shorin-arch-setup.git
 cd shorin-arch-setup
+
+# 2. 运行安装器
 sudo bash install.sh
 ```
 
-### 方法3：一条命令
+### 指定分支
 
 ```bash
-sudo pacman -Syu --noconfirm git && \
-git clone https://github.com/2048TB/shorin-arch-setup.git && \
-cd shorin-arch-setup && \
-sudo bash install.sh
+# 使用开发分支
+BRANCH=dev bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
 ```
 
 ## 🖥️ 支持的桌面环境
@@ -65,6 +85,38 @@ sudo bash install.sh
 - **办公**: VSCode, 可选LibreOffice/GIMP
 
 详见 [软件清单](./common-applist.txt) 和 [Niri专用软件](./niri-applist.txt)
+
+## 📀 ISO安装模式详解
+
+### 自动分区方案
+```
+/dev/sdX (自动检测最大磁盘)
+├─ sdX1  512MB   EFI System       (FAT32)
+└─ sdX2  剩余    Linux Filesystem (Btrfs)
+    ├─ @            → /
+    ├─ @home        → /home
+    ├─ @snapshots   → /.snapshots
+    ├─ @log         → /var/log
+    └─ @cache       → /var/cache
+```
+
+### 执行流程
+1. **环境检测** - 自动识别ISO/已安装系统
+2. **磁盘确认** - 显示目标磁盘，需输入`yes`确认擦除
+3. **基础安装** - pacstrap核心包（约5-10分钟）
+4. **chroot继续** - 自动进入新系统继续配置
+5. **桌面选择** - Niri/GNOME/None（120s超时）
+6. **用户创建** - 交互设置用户名和密码
+7. **应用选择** - FZF多选（60s超时全选）
+8. **自动重启** - 10秒倒计时
+
+### 安全机制
+- ✅ 磁盘大小检查（最小20GB）
+- ✅ 30秒确认超时（防止误操作）
+- ✅ 已安装系统自动跳过分区
+- ✅ SKIP_BASE_INSTALL标志防止重复
+
+详见 [ISO-INSTALL-GUIDE.md](./ISO-INSTALL-GUIDE.md)
 
 ## 🔧 环境变量
 

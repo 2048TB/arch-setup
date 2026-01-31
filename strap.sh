@@ -15,7 +15,12 @@ echo -e "\033[0;34m>>> Preparing to install from branch: $TARGET_BRANCH\033[0m"
 # 1. 检查并安装 git
 if ! command -v git &> /dev/null; then
     echo "Git not found. Installing..."
-    sudo pacman -Syu --noconfirm git
+    # ISO环境下无需sudo，已安装系统需要sudo
+    if [ "$EUID" -eq 0 ]; then
+        pacman -Sy --noconfirm git
+    else
+        sudo pacman -Sy --noconfirm git
+    fi
 fi
 
 # 2. 清理旧目录
@@ -37,7 +42,13 @@ fi
 if [ -d "$DIR_NAME" ]; then
     cd "$DIR_NAME"
     echo "Starting installer..."
-    sudo bash install.sh
+    
+    # ISO环境下已是root，已安装系统需要sudo
+    if [ "$EUID" -eq 0 ]; then
+        bash install.sh
+    else
+        sudo bash install.sh
+    fi
 else
     echo "Error: Directory not found."
     exit 1

@@ -4,14 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Shorin Arch Setup - Arch Linux 自动化安装系统，支持 Niri（滚动平铺WM）和 GNOME（现代桌面）的一键部署。采用模块化bash脚本架构，包含状态管理、快照恢复、交互式TUI界面、自动配置部署。
+Shorin Arch Setup - Arch Linux 自动化安装系统，支持 **Arch ISO环境全自动安装** 和 **已安装系统配置**。提供 Niri（滚动平铺WM）和 GNOME（现代桌面）双桌面选择。采用模块化bash脚本架构，包含智能环境检测、自动分区、状态管理、快照恢复、交互式TUI界面、自动配置部署。
+
+**v2.1 新特性：ISO环境支持**
+- ✅ 自动检测ISO环境 vs 已安装系统
+- ✅ ISO模式：全自动分区（GPT+Btrfs）+ pacstrap + chroot
+- ✅ 已安装模式：跳过基础安装，直接配置桌面
+- ✅ 一键命令：`bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)`
 
 ## 核心架构
 
 ### 执行流程
 ```
+[ISO环境]
 strap.sh (Bootstrap)
-  └─> install.sh (Main Orchestrator)
+  └─> install.sh (Environment Detection)
+       ├─> is_iso_environment() → true
+       └─> 00-arch-base-install.sh (Partition + Pacstrap)
+            └─> arch-chroot /mnt
+                 └─> continue-install.sh
+                      └─> install.sh (SKIP_BASE_INSTALL=1)
+                           ├─> 00-utils.sh (Tools)
+                           └─> scripts/*.sh (Modules)
+
+[已安装系统]
+strap.sh (Bootstrap)
+  └─> install.sh (Environment Detection)
+       ├─> is_iso_environment() → false
        ├─> 00-utils.sh (TUI Engine + Helper Functions)
        └─> scripts/*.sh (Modular Installation Steps)
 ```
@@ -25,17 +44,32 @@ strap.sh (Bootstrap)
 - Reflector镜像优化（带时区检测）
 - 全局清理与快照管理
 
-**00-utils.sh** - TUI可视化引擎
+**00-utils.sh** - TUI可视化引擎 + 工具函数库
 - ANSI颜色系统（H_RED, H_GREEN等）
 - 日志函数（`log`, `success`, `warn`, `error`）
 - `exe()` - 命令执行封装（带可视化输出）
 - `section()` - 章节标题渲染
-- `select_flathub_mirror()` - Flathub镜像选择菜单
+- `select_flathub_mirror()` - Flathub镜像选择菜单（拆分为5个子函数）
 - `as_user()` - 用户身份切换工具
 - `detect_target_user()` - 统一的用户检测函数（优先读取/tmp/shorin_install_user）
+- **v2.1新增工具函数**:
+  - `install_yay_package(pkg)` - Yay包安装统一接口
+  - `is_package_installed(pkg)` - 包状态检查
+  - `fzf_select_apps(list_file, [header])` - FZF交互菜单
+
+**00-arch-base-install.sh** - [ISO模式专用] 基础系统安装
+- ISO环境检测（/run/archiso, findmnt, hostname）
+- 自动磁盘选择（lsblk检测最大盘）
+- GPT分区（EFI 512M + Btrfs）
+- Btrfs子卷创建（@, @home, @snapshots, @log, @cache）
+- pacstrap基础系统安装
+- genfstab生成挂载表
+- arch-chroot + continue-install.sh桥接
+- GRUB引导安装
 
 **模块执行顺序** (BASE_MODULES数组)
 ```
+00-arch-base-install.sh → [ISO模式] 分区+pacstrap+基础配置（仅ISO环境）
 00-btrfs-init.sh      → Btrfs/快照初始化
 01-base.sh            → 基础系统（yay/paru, 字体, archlinuxcn）
 02-musthave.sh        → 必备软件（音频/输入法/蓝牙/fastfetch/flatpak）
@@ -79,6 +113,26 @@ strap.sh (Bootstrap)
 - 包含Nautilus双显卡修复（`configure_nautilus_user`）
 - GTK/GNOME Shell配置自动应用
 
+## 代码质量规范（v2.1更新）
+
+### 常量定义
+所有脚本使用`readonly`定义常量，消除魔数：
+- **install.sh**: 8个常量（超时、退出码、UID等）
+- **00-utils.sh**: 3个常量（FLATHUB_SELECTION_TIMEOUT等）
+- **04-niri-setup.sh**: 4个常量（重试次数、超时等）
+
+### 函数规范
+- 函数长度≤50行（已拆分超长函数）
+- 嵌套深度≤3层
+- 单一职责原则（SRP）
+- 工具函数集中在00-utils.sh
+
+### 代码去重
+所有重复≥3次的代码已提取为工具函数：
+- 包管理: `install_yay_package()`, `is_package_installed()`
+- 交互菜单: `fzf_select_apps()`
+- 用户检测: `detect_target_user()`
+
 ## 开发任务
 
 ### 测试脚本模块
@@ -91,6 +145,10 @@ DEBUG=1 sudo bash install.sh
 
 # 强制CN镜像
 CN_MIRROR=1 sudo bash install.sh
+
+# 测试ISO基础安装（虚拟机推荐）
+# 注意：会擦除磁盘，仅在测试环境运行
+sudo bash scripts/00-arch-base-install.sh
 ```
 
 ### 重置安装状态
@@ -252,9 +310,21 @@ flatpak:app.id                           # Flatpak包
 
 ## Bootstrap部署
 
-**远程一键安装**
+**一键安装（ISO环境支持）**
 ```bash
-bash <(curl -L is.gd/shorinsetup)
+# 通用命令（自动检测环境）
+bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/strap.sh)
+
+# ISO环境执行流程:
+# 1. 自动分区（GPT + Btrfs子卷）
+# 2. pacstrap基础系统
+# 3. arch-chroot继续配置
+# 4. 桌面环境 + 应用安装
+# 5. 重启
+
+# 已安装系统执行流程:
+# 1. 跳过分区
+# 2. 桌面环境 + 应用安装
 ```
 
 **手动克隆**

@@ -12,6 +12,12 @@ DEBUG=${DEBUG:-0}
 CN_MIRROR=${CN_MIRROR:-0}
 UNDO_SCRIPT="$SCRIPT_DIR/niri-undochange.sh"
 
+# --- Constants ---
+readonly MAX_PACKAGE_INSTALL_ATTEMPTS=3
+readonly PACKAGE_RETRY_COOLDOWN_SECONDS=3
+readonly TTY_AUTOLOGIN_TIMEOUT=20
+readonly INSTALLATION_TIMEOUT=60
+
 check_root
 
 # --- [HELPER FUNCTIONS] ---
@@ -77,12 +83,12 @@ critical_failure_handler() {
 ensure_package_installed() {
   local pkg="$1"
   local context="$2" # e.g., "Repo" or "AUR"
-  local max_attempts=3
+  local max_attempts=$MAX_PACKAGE_INSTALL_ATTEMPTS
   local attempt=1
   local install_success=false
 
   # 1. Check if already installed
-  if pacman -Q "$pkg" &>/dev/null; then
+  if is_package_installed "$pkg"; then
     return 0
   fi
 
@@ -90,13 +96,13 @@ ensure_package_installed() {
   while [ $attempt -le $max_attempts ]; do
     if [ $attempt -gt 1 ]; then
       warn "Retrying '$pkg' ($context)... (Attempt $attempt/$max_attempts)"
-      sleep 3 # Cooldown
+      sleep $PACKAGE_RETRY_COOLDOWN_SECONDS # Cooldown
     else
       log "Installing '$pkg' ($context)..."
     fi
 
     # Try installation
-    if as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"; then
+    if install_yay_package "$pkg"; then
       install_success=true
       break
     else
@@ -107,7 +113,7 @@ ensure_package_installed() {
   done
 
   # 3. Final Verification
-  if [ "$install_success" = true ] && pacman -Q "$pkg" &>/dev/null; then
+  if [ "$install_success" = true ] && is_package_installed "$pkg"; then
     success "Installed '$pkg'."
   else
     critical_failure_handler "Failed to install '$pkg' after $max_attempts attempts."
@@ -135,7 +141,7 @@ KNOWN_DMS=("gdm" "sddm" "lightdm" "lxdm" "slim" "xorg-xdm" "ly" "greetd")
 SKIP_AUTOLOGIN=false
 DM_FOUND=""
 for dm in "${KNOWN_DMS[@]}"; do
-  if pacman -Q "$dm" &>/dev/null; then
+  if is_package_installed "$dm"; then
     DM_FOUND="$dm"
     break
   fi
@@ -145,7 +151,7 @@ if [ -n "$DM_FOUND" ]; then
   info_kv "Conflict" "${H_RED}$DM_FOUND${NC}"
   SKIP_AUTOLOGIN=true
 else
-  read -t 20 -p "$(echo -e "   ${H_CYAN}Enable TTY auto-login? [Y/n] (Default Y): ${NC}")" choice || true
+  read -t "$TTY_AUTOLOGIN_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Enable TTY auto-login? [Y/n] (Default Y): ${NC}")" choice || true
   [[ "${choice:-Y}" =~ ^[Yy]$ ]] && SKIP_AUTOLOGIN=false || SKIP_AUTOLOGIN=true
 fi
 
@@ -193,37 +199,14 @@ if [ -f "$LIST_FILE" ]; then
     warn "App list is empty. Skipping."
     PACKAGE_ARRAY=()
   else
-    echo -e "\n   ${H_YELLOW}>>> Default installation in 60s. Press ANY KEY to customize...${NC}"
+    echo -e "\n   ${H_YELLOW}>>> Default installation in ${INSTALLATION_TIMEOUT}s. Press ANY KEY to customize...${NC}"
 
-    if read -t 60 -n 1 -s -r; then
+    if read -t "$INSTALLATION_TIMEOUT" -n 1 -s -r; then
       # --- [RESTORED] Original FZF Selection Logic ---
       clear
       log "Loading package list..."
 
-      SELECTED_LINES=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" |
-        sed -E 's/[[:space:]]+#/\t#/' |
-        fzf --multi \
-          --layout=reverse \
-          --border \
-          --margin=1,2 \
-          --prompt="Search Pkg > " \
-          --pointer=">>" \
-          --marker="* " \
-          --delimiter=$'\t' \
-          --with-nth=1 \
-          --bind 'load:select-all' \
-          --bind 'ctrl-a:select-all,ctrl-d:deselect-all' \
-          --info=inline \
-          --header="[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL" \
-          --preview "echo {} | cut -f2 -d$'\t' | sed 's/^# //'" \
-          --preview-window=right:50%:wrap:border-left \
-          --color=dark \
-          --color=fg+:white,bg+:black \
-          --color=hl:blue,hl+:blue:bold \
-          --color=header:yellow:bold \
-          --color=info:magenta \
-          --color=prompt:cyan,pointer:cyan:bold,marker:green:bold \
-          --color=spinner:yellow)
+      SELECTED_LINES=$(fzf_select_apps "$LIST_FILE" "[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL")
 
       clear
 
@@ -259,7 +242,7 @@ if [ -f "$LIST_FILE" ]; then
     # 1. Batch Install Repo Packages
     if [ ${#BATCH_LIST[@]} -gt 0 ]; then
       log "Phase 1: Batch Installing Repo Packages..."
-      as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${BATCH_LIST[@]}" || true
+      as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${BATCH_LIST[@]}" || true  # Batch mode, keep direct call
 
       # Verify Each
       for pkg in "${BATCH_LIST[@]}"; do

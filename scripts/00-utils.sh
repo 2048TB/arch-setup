@@ -4,6 +4,11 @@
 # 00-utils.sh - The "TUI" Visual Engine (v4.0)
 # ==============================================================================
 
+# --- Constants ---
+readonly FLATHUB_SELECTION_TIMEOUT=60
+readonly LOG_FILE_PERMISSIONS=666
+readonly TARGET_USER_UID=1000
+
 # --- 1. 颜色与样式定义 (ANSI) ---
 # 注意：这里定义的是字面量字符串，需要 echo -e 来解析
 export NC='\033[0m'
@@ -35,7 +40,7 @@ export ARROW="${H_CYAN}➜${NC}"
 
 # 日志文件
 export TEMP_LOG_FILE="/tmp/log-shorin-arch-setup.txt"
-[ ! -f "$TEMP_LOG_FILE" ] && touch "$TEMP_LOG_FILE" && chmod 666 "$TEMP_LOG_FILE"
+[ ! -f "$TEMP_LOG_FILE" ] && touch "$TEMP_LOG_FILE" && chmod "$LOG_FILE_PERMISSIONS" "$TEMP_LOG_FILE"
 
 # --- 2. 基础工具 ---
 
@@ -138,9 +143,81 @@ exe_silent() {
 
 # --- 5. 可复用逻辑块 ---
 
-# 动态选择 Flathub 镜像源 (修复版：使用 echo -e 处理颜色变量)
+# Calculate menu width for display
+calculate_menu_width() {
+    local title="$1"
+    shift
+    local items=("$@")
+    local max_len=${#title}
+    
+    for item in "${items[@]}"; do
+        local item_len=$((${#item} + 18)) # "[x] Name - Recommended"
+        if (( item_len > max_len )); then
+            max_len=$item_len
+        fi
+    done
+    
+    echo $((max_len + 4))
+}
+
+# Render menu border and title
+render_menu_header() {
+    local menu_width="$1"
+    local title="$2"
+    
+    local line_str=""
+    printf -v line_str "%*s" "$menu_width" ""
+    line_str=${line_str// /─}
+    
+    echo ""
+    echo -e "${H_PURPLE}╭${line_str}╮${NC}"
+    
+    local title_padding_len=$(( (menu_width - ${#title}) / 2 ))
+    local right_padding_len=$((menu_width - ${#title} - title_padding_len))
+    local t_pad_l=""; printf -v t_pad_l "%*s" "$title_padding_len" ""
+    local t_pad_r=""; printf -v t_pad_r "%*s" "$right_padding_len" ""
+    
+    echo -e "${H_PURPLE}│${NC}${t_pad_l}${BOLD}${title}${NC}${t_pad_r}${H_PURPLE}│${NC}"
+    echo -e "${H_PURPLE}├${line_str}┤${NC}"
+}
+
+# Render menu footer
+render_menu_footer() {
+    local menu_width="$1"
+    local line_str=""
+    printf -v line_str "%*s" "$menu_width" ""
+    line_str=${line_str// /─}
+    echo -e "${H_PURPLE}╰${line_str}╯${NC}"
+    echo ""
+}
+
+# Render single menu option
+render_menu_option() {
+    local index="$1"
+    local name="$2"
+    local menu_width="$3"
+    local display_idx=$((index + 1))
+    
+    local color_str raw_str
+    if [ "$index" -eq 0 ]; then
+        raw_str=" [$display_idx] $name - Recommended"
+        color_str=" ${H_CYAN}[$display_idx]${NC} ${name} - ${H_GREEN}Recommended${NC}"
+    else
+        raw_str=" [$display_idx] $name"
+        color_str=" ${H_CYAN}[$display_idx]${NC} ${name}"
+    fi
+    
+    local padding=$((menu_width - ${#raw_str}))
+    local pad_str=""
+    if [ "$padding" -gt 0 ]; then
+        printf -v pad_str "%*s" "$padding" ""
+    fi
+    
+    echo -e "${H_PURPLE}│${NC}${color_str}${pad_str}${H_PURPLE}│${NC}"
+}
+
+# Main Flathub mirror selection
 select_flathub_mirror() {
-    # 1. 索引数组保证顺序
     local names=(
         "SJTU (Shanghai Jiao Tong)"
         "USTC (Univ of Sci & Tech of China)"
@@ -152,100 +229,35 @@ select_flathub_mirror() {
         "https://mirrors.ustc.edu.cn/flathub"
         "https://dl.flathub.org/repo/"
     )
-
-    # 2. 动态计算菜单宽度 (基于无颜色的纯文本)
-    local max_len=0
-    local title_text="Select Flathub Mirror (60s Timeout)"
     
-    max_len=${#title_text}
-
-    for name in "${names[@]}"; do
-        # 预估显示长度："[x] Name - Recommended"
-        local item_len=$((${#name} + 4 + 14)) 
-        if (( item_len > max_len )); then
-            max_len=$item_len
-        fi
-    done
-
-    # 菜单总宽度
-    local menu_width=$((max_len + 4))
-
-    # --- 3. 渲染菜单 (使用 echo -e 确保颜色变量被解析) ---
-    echo ""
+    local title_text="Select Flathub Mirror (${FLATHUB_SELECTION_TIMEOUT}s Timeout)"
+    local menu_width
+    menu_width=$(calculate_menu_width "$title_text" "${names[@]}")
     
-    # 生成横线
-    local line_str=""
-    printf -v line_str "%*s" "$menu_width" ""
-    line_str=${line_str// /─}
-
-    # 打印顶部边框
-    echo -e "${H_PURPLE}╭${line_str}╮${NC}"
-
-    # 打印标题 (计算居中填充)
-    local title_padding_len=$(( (menu_width - ${#title_text}) / 2 ))
-    local right_padding_len=$((menu_width - ${#title_text} - title_padding_len))
+    render_menu_header "$menu_width" "$title_text"
     
-    # 生成填充空格
-    local t_pad_l=""; printf -v t_pad_l "%*s" "$title_padding_len" ""
-    local t_pad_r=""; printf -v t_pad_r "%*s" "$right_padding_len" ""
-    
-    echo -e "${H_PURPLE}│${NC}${t_pad_l}${BOLD}${title_text}${NC}${t_pad_r}${H_PURPLE}│${NC}"
-
-    # 打印中间分隔线
-    echo -e "${H_PURPLE}├${line_str}┤${NC}"
-
-    # 打印选项
     for i in "${!names[@]}"; do
-        local name="${names[$i]}"
-        local display_idx=$((i+1))
-        
-        # 1. 构造用于显示的带颜色字符串
-        local color_str=""
-        # 2. 构造用于计算长度的无颜色字符串
-        local raw_str=""
-
-        if [ "$i" -eq 0 ]; then
-            raw_str=" [$display_idx] $name - Recommended"
-            color_str=" ${H_CYAN}[$display_idx]${NC} ${name} - ${H_GREEN}Recommended${NC}"
-        else
-            raw_str=" [$display_idx] $name"
-            color_str=" ${H_CYAN}[$display_idx]${NC} ${name}"
-        fi
-
-        # 计算右侧填充空格
-        local padding=$((menu_width - ${#raw_str}))
-        local pad_str=""; 
-        if [ "$padding" -gt 0 ]; then
-            printf -v pad_str "%*s" "$padding" ""
-        fi
-        
-        # 打印：边框 + 内容 + 填充 + 边框
-        echo -e "${H_PURPLE}│${NC}${color_str}${pad_str}${H_PURPLE}│${NC}"
+        render_menu_option "$i" "${names[$i]}" "$menu_width"
     done
-
-    # 打印底部边框
-    echo -e "${H_PURPLE}╰${line_str}╯${NC}"
-    echo ""
-
-    # --- 4. 用户交互 ---
+    
+    render_menu_footer "$menu_width"
+    
     local choice
-    # 提示符
-    read -t 60 -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice
-    if [ $? -ne 0 ]; then echo ""; fi
+    read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice
+    [ $? -ne 0 ] && echo ""
     choice=${choice:-1}
     
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
         log "Invalid choice or timeout. Defaulting to SJTU..."
         choice=1
     fi
-
-    local index=$((choice-1))
+    
+    local index=$((choice - 1))
     local selected_name="${names[$index]}"
     local selected_url="${urls[$index]}"
-
+    
     log "Setting Flathub mirror to: ${H_GREEN}$selected_name${NC}"
     
-    # 执行修改 (仅修改 flathub，不涉及 github)
     if exe flatpak remote-modify flathub --url="$selected_url"; then
         success "Mirror updated."
     else
@@ -265,12 +277,54 @@ detect_target_user() {
   else
     # 回退到UID 1000检测
     local detected
-    detected=$(awk -F: '$3 == 1000 {print $1}' /etc/passwd)
+    detected=$(awk -F: "\$3 == $TARGET_USER_UID {print \$1}" /etc/passwd)
     TARGET_USER="${detected:-$(read -p "Target user: " u && echo "$u")}"
   fi
 
   HOME_DIR="/home/$TARGET_USER"
   export TARGET_USER HOME_DIR
+}
+
+# 包管理统一函数
+install_yay_package() {
+  local pkg="$1"
+  as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"
+}
+
+is_package_installed() {
+  local pkg="$1"
+  pacman -Qi "$pkg" &>/dev/null
+}
+
+# FZF通用应用选择菜单
+fzf_select_apps() {
+  local list_file="$1"
+  local header_text="${2:-[TAB] TOGGLE | [ENTER] SELECT | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL}"
+  
+  grep -vE "^\s*#|^\s*$" "$list_file" | \
+    sed -E 's/[[:space:]]+#/\t#/' | \
+    fzf --multi \
+      --layout=reverse \
+      --border \
+      --margin=1,2 \
+      --prompt="Search App > " \
+      --pointer=">>" \
+      --marker="* " \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --bind 'load:select-all' \
+      --bind 'ctrl-a:select-all,ctrl-d:deselect-all' \
+      --info=inline \
+      --header="$header_text" \
+      --preview "echo {} | cut -f2 -d$'\t' | sed 's/^# //'" \
+      --preview-window=right:50%:wrap:border-left \
+      --color=dark \
+      --color=fg+:white,bg+:black \
+      --color=hl:blue,hl+:blue:bold \
+      --color=header:yellow:bold \
+      --color=info:magenta \
+      --color=prompt:cyan,pointer:cyan:bold,marker:green:bold \
+      --color=spinner:yellow
 }
 
 

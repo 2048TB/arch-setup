@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/00-utils.sh"
 
+# --- Constants ---
+readonly GRUB_THEME_SELECTION_TIMEOUT=60
+
 check_root
 
 # ------------------------------------------------------------------------------
@@ -132,7 +135,7 @@ if [ "$SKIP_THEME" == "true" ]; then
     log "Skipping theme selection (No themes found)."
 else
     # Calculation & Menu Rendering
-    TITLE_TEXT="Select GRUB Theme (60s Timeout)"
+    TITLE_TEXT="Select GRUB Theme (${GRUB_THEME_SELECTION_TIMEOUT}s Timeout)"
     MAX_LEN=${#TITLE_TEXT}
     
     # 计算主题名称最大长度
@@ -187,7 +190,7 @@ else
     echo -e "${H_PURPLE}╰${LINE_STR}╯${NC}\n"
 
     echo -ne "   ${H_YELLOW}Enter choice [1-$SKIP_IDX]: ${NC}"
-    read -t 60 USER_CHOICE
+    read -t "$GRUB_THEME_SELECTION_TIMEOUT" USER_CHOICE
     if [ -z "$USER_CHOICE" ]; then echo ""; fi
     USER_CHOICE=${USER_CHOICE:-1} # 默认选择第一个
 

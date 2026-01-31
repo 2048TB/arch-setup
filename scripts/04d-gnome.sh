@@ -52,11 +52,11 @@ trap cleanup_sudo EXIT INT TERM
 #=================================================
 section "Step 1" "Install base pkgs"
 log "Installing GNOME and base tools..."
-if exe as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None \
+if as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None \
     gnome-desktop gnome-backgrounds gnome-tweaks gdm ghostty celluloid loupe \
     gnome-control-center gnome-software flatpak file-roller \
     nautilus-python firefox nm-connection-editor pacman-contrib \
-    dnsmasq ttf-jetbrains-maple-mono-nf-xx-xx; then
+    dnsmasq ttf-jetbrains-maple-mono-nf-xx-xx; then  # Batch install, keep direct call
 
         exe pacman -S --noconfirm --needed ffmpegthumbnailer gvfs-smb nautilus-open-any-terminal file-roller gnome-keyring gst-plugins-base gst-plugins-good gst-libav nautilus 
         log "Packages installed successfully."
@@ -204,7 +204,7 @@ EOF
 section "Step 5" "Install Extensions"
 log "Installing Extensions CLI..."
 
-sudo -u $TARGET_USER yay -S --noconfirm --needed --answerdiff=None --answerclean=None gnome-extensions-cli
+install_yay_package gnome-extensions-cli
 
 EXTENSION_LIST=(
     "arch-update@RaphaelRochet"
@@ -293,7 +293,7 @@ EOF
 # Firefox Policies
 #=================================================
 section "Firefox" "Configuring Firefox GNOME Integration"
-exe sudo -u $TARGET_USER yay -S --noconfirm --needed --answerdiff=None --answerclean=None gnome-browser-connector
+exe install_yay_package gnome-browser-connector
 
 # 配置 Firefox 策略自动安装扩展
 POL_DIR="/etc/firefox/policies"
