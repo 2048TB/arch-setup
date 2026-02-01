@@ -138,15 +138,14 @@ FORCE_LOCALE_GEN=1                # 强制locale-gen
 BRANCH=dev                        # 指定分支
 ```
 
-### 配置文件
-创建 `config.conf` 或使用 `SHORIN_CONFIG=/path/to/config.conf`：
+### 配置示例
 ```bash
-# 参考模板: config.conf.example
+# 环境变量方式
 TARGET_DISK=/dev/nvme0n1
 DESKTOP_ENV=niri
 SHORIN_USERNAME="youruser"
 SHORIN_PASSWORD="yourpassword"
-ROOT_PASSWORD_HASH='$6$...'       # openssl passwd -6 "pass"
+ROOT_PASSWORD_HASH='$6$...'       # 使用 openssl passwd -6 "pass" 生成
 ```
 
 ## 🛡️ 快照与恢复
@@ -174,10 +173,11 @@ shorin-arch-setup/
 │   ├── modules.sh              # 模块集合
 │   ├── 00-utils.sh             # 工具函数
 │   └── 00-arch-base-install.sh # ISO基础安装
-├── configs/                     # Shell配置
-├── niri-dotfiles/               # Niri配置
+├── niri-dotfiles/               # Niri完整配置（Shell+应用+主题）
 ├── gnome-dotfiles/              # GNOME配置
-└── config.conf.example          # 配置模板
+├── grub-themes/                 # GRUB主题
+├── common-applist.txt           # 通用应用列表
+└── niri-applist.txt             # Niri专用应用
 ```
 
 ## 🔍 开发指南

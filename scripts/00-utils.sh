@@ -5,10 +5,12 @@
 # ==============================================================================
 
 # Idempotent guard for repeated sourcing (modules.sh embeds multiple modules)
-if [ -n "${SHORIN_UTILS_LOADED:-}" ]; then
+# Only skip when already sourced in this same shell.
+if [ "${SHORIN_UTILS_LOADED:-0}" = "1" ] && [ "${SHORIN_UTILS_LOADED_PID:-}" = "$$" ]; then
     return 0 2>/dev/null || exit 0
 fi
-export SHORIN_UTILS_LOADED=1
+SHORIN_UTILS_LOADED=1
+SHORIN_UTILS_LOADED_PID=$$
 
 # --- Constants ---
 readonly FLATHUB_SELECTION_TIMEOUT=60
@@ -58,10 +60,12 @@ on_error() {
 
 enable_strict_mode() {
     if [ "${STRICT_MODE:-1}" = "1" ]; then
-        if [ "${STRICT_MODE_ENABLED:-0}" = "1" ]; then
+        # Only skip when already enabled in this same shell.
+        if [ "${STRICT_MODE_ENABLED:-0}" = "1" ] && [ "${STRICT_MODE_ENABLED_PID:-}" = "$$" ]; then
             return 0
         fi
-        export STRICT_MODE_ENABLED=1
+        STRICT_MODE_ENABLED=1
+        STRICT_MODE_ENABLED_PID=$$
         set -Eeuo pipefail
         shopt -s inherit_errexit 2>/dev/null || true
         if [ "${STRICT_MODE_ERR_TRAP:-1}" = "1" ]; then

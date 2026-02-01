@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**最后更新**: 2026-02-01 | **版本**: v2.1.1
+**最后更新**: 2026-02-01 | **版本**: v2.2.0
 
 ## 项目概述
 
@@ -118,16 +118,21 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 ## 配置部署
 
 **niri-dotfiles/** - Niri完整配置
-- 部署时机：04-niri-setup.sh
+- 部署时机：modules.sh → 04-niri-setup
 - Shell配置：.zshrc, .bashrc, .vimrc
 - 应用配置：niri, waybar, fuzzel, mako, ghostty, yazi, starship
 - 主题资源：.themes, wallpapers
 - 复制方式：`copy_recursive()` 智能递归（穿透.config/.local）
 
 **gnome-dotfiles/** - GNOME配置
-- 部署时机：04d-gnome.sh
+- 部署时机：modules.sh → 04d-gnome
 - 内容：GTK主题, dconf设置, gnome-shell扩展, .config, .local
 - 复制方式：`cp -rf` 直接合并到$HOME
+
+**grub-themes/** - GRUB主题
+- 部署时机：modules.sh → 07-grub-theme
+- 主题选项：CyberGRUB-2077 / crossgrub
+- 自动安装到 /boot/grub/themes/
 
 ## 智能磁盘选择
 
