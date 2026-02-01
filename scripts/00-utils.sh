@@ -136,7 +136,7 @@ section() {
 info_kv() {
     local key="$1"
     local val="$2"
-    local extra="$3"
+    local extra="${3:-}"
     printf "   ${H_BLUE}●${NC} %-15s : ${BOLD}%s${NC} ${DIM}%s${NC}\n" "$key" "$val" "$extra"
     write_log "INFO" "$key=$val"
 }
