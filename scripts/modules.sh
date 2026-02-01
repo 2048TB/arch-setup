@@ -311,7 +311,7 @@ case "$MODULE" in
             # -o TARGET: 只输出挂载点路径
             # -t vfat: 限制文件系统类型
             # sort -r: 反向排序，这样 /boot/efi 会排在 /boot 之前（如果同时存在），优先匹配深层路径
-            VFAT_MOUNTS=$(findmnt -n -l -o TARGET -t vfat)
+            VFAT_MOUNTS=$(findmnt -n -l -o TARGET -t vfat 2>/dev/null || true)
     
             if [ -n "$VFAT_MOUNTS" ]; then
                 # 2. 遍历这些 vfat 分区，寻找 grub 目录
