@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Shorin Arch Setup - Arch Linux 自动化安装系统，支持 **Arch ISO环境全自动安装** 和 **已安装系统配置**。采用模块化bash脚本架构，包含智能环境检测、自动分区、状态管理、快照恢复、交互式TUI界面。
+Shorin Arch Setup - Arch Linux 自动化安装系统，**固定Niri桌面环境自动部署**。采用模块化bash脚本架构，包含智能环境检测、自动分区、状态管理、快照恢复。
 
 ## 核心架构
 
@@ -27,10 +27,10 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 ### 关键组件
 
 **scripts/install.sh** - 主控制器
-- 桌面环境选择菜单（Niri/GNOME/None）
+- **固定Niri桌面环境**（移除选择菜单）
 - 状态文件管理（`.install_progress`）
 - 模块动态加载
-- Reflector镜像优化
+- 使用默认镜像（移除Reflector）
 - 全局清理与快照管理
 
 **scripts/00-utils.sh** - 工具函数库
@@ -48,19 +48,17 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 - pacstrap + genfstab + arch-chroot
 - GRUB引导安装
 
-**scripts/modules.sh** - 模块集合（合并原00-99模块）
+**scripts/modules.sh** - 模块集合
 ```
 00-btrfs-init.sh      → Btrfs快照初始化
 01-base.sh            → 基础系统（yay, 字体, archlinuxcn）
-02-musthave.sh        → 必备软件（音频/输入法/蓝牙）
+02-musthave.sh        → 必备软件（音频/输入法/蓝牙/Flatpak）
 02a-dualboot-fix.sh   → 双系统修复
 03-user.sh            → 用户创建 + configs部署
 03b-gpu-driver.sh     → GPU驱动
 03c-snapshot-before-desktop.sh → 桌面前快照
-04-niri-setup.sh      → Niri桌面
-04d-gnome.sh          → GNOME桌面
-07-grub-theme.sh      → GRUB主题
-99-apps.sh            → 应用批量安装
+04-niri-setup.sh      → Niri桌面（自动安装48个依赖，启用TTY登录）
+99-apps.sh            → 应用批量安装（自动安装93个应用）
 ```
 
 ### 状态管理
@@ -68,7 +66,6 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 **恢复能力**
 - 模块成功后写入 `.install_progress`
 - 重新运行自动跳过已完成步骤
-- Reflector单独标记 `REFLECTOR_DONE`
 
 **快照策略**
 - 清理中间pre/post快照
@@ -79,7 +76,7 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 
 ### 常量定义
 - **scripts/install.sh**: 7个常量（超时、退出码）
-- **00-utils.sh**: 3个常量（FLATHUB_SELECTION_TIMEOUT, TARGET_USER_UID）
+- **00-utils.sh**: 2个常量（LOG_FILE_PERMISSIONS, TARGET_USER_UID）
 - **00-arch-base-install.sh**: 5个常量（分区大小、最小磁盘）
 
 ### 函数规范
@@ -123,16 +120,6 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 - 应用配置：niri, waybar, fuzzel, mako, ghostty, yazi, starship
 - 主题资源：.themes, wallpapers
 - 复制方式：`copy_recursive()` 智能递归（穿透.config/.local）
-
-**gnome-dotfiles/** - GNOME配置
-- 部署时机：modules.sh → 04d-gnome
-- 内容：GTK主题, dconf设置, gnome-shell扩展, .config, .local
-- 复制方式：`cp -rf` 直接合并到$HOME
-
-**grub-themes/** - GRUB主题
-- 部署时机：modules.sh → 07-grub-theme
-- 主题选项：CyberGRUB-2077 / crossgrub
-- 自动安装到 /boot/grub/themes/
 
 ## 智能磁盘选择
 
@@ -191,7 +178,6 @@ CONFIRM_DISK_WIPE=YES \
 ### 通用参数
 - `SHORIN_USERNAME`: 用户名
 - `SHORIN_PASSWORD`: 密码
-- `DESKTOP_ENV`: niri|gnome|none
 - `CN_MIRROR`: 中国镜像（0/1）
 - `DEBUG`: 调试模式（0/1）
 
@@ -249,15 +235,9 @@ bash -n scripts/*.sh
 
 ## 特殊注意事项
 
-### 镜像选择
-- Asia/Shanghai时区 → 提示是否运行Reflector（默认跳过）
-- 其他时区 → 自动检测国家代码优化镜像
-- Flathub镜像：SJTU/USTC/Official三选一
-
 ### 双显卡处理
 - 检测lspci输出
 - NVIDIA+其他 → nvidia专有驱动 + nvidia-prime
-- GNOME Nautilus双显卡+NVIDIA时强制 GSK_RENDERER=gl
 
 ### Btrfs快照
 - 使用snapper创建快照
@@ -266,27 +246,25 @@ bash -n scripts/*.sh
 - 清理函数仅删除pre/post类型
 
 ### 应用安装
-- FZF交互式选择（全选/多选/搜索）
-- 超时60秒自动安装全部
+- 自动安装所有预定义应用（无交互）
 - 分类安装：Repo批量 / AUR逐个 / Flatpak逐个
 - 智能依赖：Wine/Virt-Manager/Lutris/LazyVim
 - 跳过已安装包（pacman -Qi检测）
 
 ## Bootstrap部署
 
-**一键安装**
+**一键安装（最小参数）**
 ```bash
 TARGET_DISK=/dev/nvme0n1 \
   bash <(curl -L https://raw.githubusercontent.com/2048TB/shorin-arch-setup/main/scripts/strap.sh)
 ```
 
-**零交互模式**
+**零交互模式（完整参数）**
 ```bash
 TARGET_DISK=/dev/nvme0n1 \
 CONFIRM_DISK_WIPE=YES \
 SHORIN_USERNAME="user" SHORIN_PASSWORD="pass" \
 ROOT_PASSWORD_HASH='$6$...' \
-DESKTOP_ENV="niri" \
   bash <(curl -L ...)
 ```
 
