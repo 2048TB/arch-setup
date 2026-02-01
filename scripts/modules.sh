@@ -1366,7 +1366,7 @@ case "$MODULE" in
       # 确保目标容器目录存在 (比如确保 ~/.local/share 存在)
       as_user mkdir -p "$dest_dir"
     
-      find "$src_dir" -mindepth 1 -maxdepth 1 -not -path '*/.git*' | while read -r src_path; do
+      while read -r src_path; do
         local item_name
         item_name=$(basename "$src_path")
     
@@ -1404,7 +1404,7 @@ case "$MODULE" in
             # 复制文件或目录
             as_user cp -r "$src_path" "$target_path"
         fi
-      done
+      done < <(find "$src_dir" -mindepth 1 -maxdepth 1 -not -path '*/.git*' 2>/dev/null || true)
     }
     
     # --- Execution ---
