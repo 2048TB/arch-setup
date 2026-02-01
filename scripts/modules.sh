@@ -522,7 +522,12 @@ case "$MODULE" in
     fi
     
     if [ "$IS_CN_ENV" = true ]; then
-      select_flathub_mirror
+      log "Setting Flathub mirror to: ${H_GREEN}SJTU${NC}"
+      if exe flatpak remote-modify flathub --url="https://mirror.sjtu.edu.cn/flathub"; then
+        success "Mirror updated."
+      else
+        warn "Failed to update mirror, continuing..."
+      fi
     else
       log "Using Global Sources."
     fi

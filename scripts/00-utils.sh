@@ -13,7 +13,6 @@ SHORIN_UTILS_LOADED=1
 SHORIN_UTILS_LOADED_PID=$$
 
 # --- Constants ---
-readonly FLATHUB_SELECTION_TIMEOUT=60
 readonly LOG_FILE_PERMISSIONS=666
 readonly TARGET_USER_UID=1000
 
@@ -318,56 +317,6 @@ render_menu_option() {
     fi
     
     echo -e "${H_PURPLE}│${NC}${color_str}${pad_str}${H_PURPLE}│${NC}"
-}
-
-# Main Flathub mirror selection
-select_flathub_mirror() {
-    local names=(
-        "SJTU (Shanghai Jiao Tong)"
-        "USTC (Univ of Sci & Tech of China)"
-        "FlatHub Offical"
-    )
-    
-    local urls=(
-        "https://mirror.sjtu.edu.cn/flathub"
-        "https://mirrors.ustc.edu.cn/flathub"
-        "https://dl.flathub.org/repo/"
-    )
-    
-    local title_text="Select Flathub Mirror (${FLATHUB_SELECTION_TIMEOUT}s Timeout)"
-    local menu_width
-    menu_width=$(calculate_menu_width "$title_text" "${names[@]}")
-    
-    render_menu_header "$menu_width" "$title_text"
-    
-    for i in "${!names[@]}"; do
-        render_menu_option "$i" "${names[$i]}" "$menu_width"
-    done
-    
-    render_menu_footer "$menu_width"
-    
-    local choice
-    if ! read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice; then
-        echo ""
-    fi
-    choice=${choice:-1}
-    
-    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
-        log "Invalid choice or timeout. Defaulting to SJTU..."
-        choice=1
-    fi
-    
-    local index=$((choice - 1))
-    local selected_name="${names[$index]}"
-    local selected_url="${urls[$index]}"
-    
-    log "Setting Flathub mirror to: ${H_GREEN}$selected_name${NC}"
-    
-    if exe flatpak remote-modify flathub --url="$selected_url"; then
-        success "Mirror updated."
-    else
-        error "Failed to update mirror."
-    fi
 }
 
 as_user() {
