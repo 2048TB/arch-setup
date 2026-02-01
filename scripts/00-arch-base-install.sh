@@ -286,9 +286,10 @@ else
     # 系统盘需要输入完整磁盘名称
     if is_system_disk "$TARGET_DISK"; then
         echo -e "${H_RED}>>> SYSTEM DISK DETECTED! Type the FULL disk name to confirm:${NC}"
-        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type '$TARGET_DISK' to confirm: ${NC}")" confirm; then
+        if ! read -r -t 30 -p "$(echo -e "   ${H_YELLOW}Type '$TARGET_DISK' to confirm: ${NC}")" confirm; then
             confirm=""
         fi
+        confirm=$(echo "$confirm" | xargs)
         
         if [ "$confirm" != "$TARGET_DISK" ]; then
             error "Confirmation failed. Installation cancelled."
@@ -297,10 +298,10 @@ else
         confirm="yes"
     else
         # 普通磁盘只需输入 yes
-        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type 'yes' to ERASE $TARGET_DISK: ${NC}")" confirm; then
+        if ! read -r -t 30 -p "$(echo -e "   ${H_YELLOW}Type 'yes' to ERASE $TARGET_DISK: ${NC}")" confirm; then
             confirm=""
         fi
-        confirm=${confirm:-NO}
+        confirm=$(echo "${confirm:-NO}" | xargs | tr '[:upper:]' '[:lower:]')
     fi
 fi
 
