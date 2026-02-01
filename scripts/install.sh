@@ -7,7 +7,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 SCRIPTS_DIR="$REPO_DIR/scripts"
-STATE_FILE="$REPO_DIR/.install_progress"
+STATE_DIR="/var/lib/shorin"
+STATE_FILE_DEFAULT="$STATE_DIR/install_state"
+STATE_FILE="${STATE_FILE_OVERRIDE:-$STATE_FILE_DEFAULT}"
+LEGACY_STATE_FILE="$REPO_DIR/.install_progress"
 
 # --- Source Visual Engine ---
 if [ -f "$SCRIPTS_DIR/00-utils.sh" ]; then
@@ -32,6 +35,49 @@ cleanup_on_exit() {
     rm -f "/tmp/shorin_install_user"
 }
 trap cleanup_on_exit EXIT
+
+# --- State File Helpers ---
+state_done_count() {
+    if [ ! -f "$STATE_FILE" ]; then
+        echo 0
+        return
+    fi
+    grep -v '^#' "$STATE_FILE" | wc -l
+}
+
+init_state_file() {
+    mkdir -p "$STATE_DIR"
+    chmod 700 "$STATE_DIR"
+
+    if [ -f "$LEGACY_STATE_FILE" ] && [ ! -f "$STATE_FILE" ]; then
+        cp "$LEGACY_STATE_FILE" "$STATE_FILE"
+        log "Migrated legacy state file to $STATE_FILE"
+    fi
+
+    if [ -f "$STATE_FILE" ]; then
+        local hash_line existing_hash
+        hash_line=$(grep -m1 '^#modules_sha256=' "$STATE_FILE" || true)
+        if [ -n "$hash_line" ]; then
+            existing_hash="${hash_line#*=}"
+            if [ "$existing_hash" != "$STATE_MODULES_HASH" ]; then
+                local backup="${STATE_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+                mv "$STATE_FILE" "$backup"
+                warn "Module list changed. State file reset (backup: $backup)."
+            fi
+        else
+            local tmp_file
+            tmp_file="$(mktemp)"
+            printf '#modules_sha256=%s\n' "$STATE_MODULES_HASH" > "$tmp_file"
+            cat "$STATE_FILE" >> "$tmp_file"
+            mv "$tmp_file" "$STATE_FILE"
+        fi
+    fi
+
+    if [ ! -f "$STATE_FILE" ]; then
+        printf '#modules_sha256=%s\n' "$STATE_MODULES_HASH" > "$STATE_FILE"
+    fi
+    chmod 600 "$STATE_FILE"
+}
 
 # --- Environment ---
 export DEBUG=${DEBUG:-0}
@@ -90,9 +136,14 @@ show_banner() {
     echo ""
 }
 
-# --- Fixed Desktop Environment ---
-export DESKTOP_ENV="niri"
-log "Desktop Environment: Niri (Fixed)"
+# --- Desktop Environment ---
+DESKTOP_ENV="${DESKTOP_ENV:-niri}"
+if [ "$DESKTOP_ENV" != "niri" ]; then
+    warn "Only 'niri' is supported in this branch. Forcing DESKTOP_ENV=niri."
+    DESKTOP_ENV="niri"
+fi
+export DESKTOP_ENV
+log "Desktop Environment: ${DESKTOP_ENV^^} (Supported: niri)"
 sys_dashboard() {
     echo -e "${H_BLUE}╔════ SYSTEM DIAGNOSTICS ══════════════════════════════╗${NC}"
     echo -e "${H_BLUE}║${NC} ${BOLD}Kernel${NC}   : $(uname -r)"
@@ -108,7 +159,7 @@ sys_dashboard() {
     fi
     
     if [ -f "$STATE_FILE" ]; then
-        done_count=$(wc -l < "$STATE_FILE")
+        done_count=$(state_done_count)
         echo -e "${H_BLUE}║${NC} ${BOLD}Progress${NC} : Resuming ($done_count steps recorded)"
     fi
     echo -e "${H_BLUE}╚══════════════════════════════════════════════════════╝${NC}"
@@ -143,10 +194,6 @@ if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
     fi
 fi
 
-clear
-show_banner
-sys_dashboard
-
 # Fixed Module List for Niri
 MODULES=(
     "00-btrfs-init.sh"
@@ -165,7 +212,12 @@ if [ "${1:-}" = "--module" ] && [ -n "${2:-}" ]; then
     MODULES=("$ONLY_MODULE")
 fi
 
-if [ ! -f "$STATE_FILE" ]; then touch "$STATE_FILE"; fi
+STATE_MODULES_HASH=$(printf '%s\n' "${MODULES[@]}" | sha256sum | awk '{print $1}')
+init_state_file
+
+clear
+show_banner
+sys_dashboard
 
 TOTAL_STEPS=${#MODULES[@]}
 CURRENT_STEP=0
@@ -208,7 +260,7 @@ for module in "${MODULES[@]}"; do
     # Checkpoint Logic: Auto-skip if in state file
     if grep -q "^${module}$" "$STATE_FILE"; then
         echo -e "   ${H_GREEN}✔${NC} Module ${BOLD}${module}${NC} already completed."
-        echo -e "   ${DIM}   Skipping... (Delete .install_progress to force run)${NC}"
+        echo -e "   ${DIM}   Skipping... (Delete $STATE_FILE to force run)${NC}"
         continue
     fi
 
@@ -349,31 +401,37 @@ clean_intermediate_snapshots "root"
 clean_intermediate_snapshots "home"
 
 
-# Detect user ID 1000 or prompt manually
-DETECTED_USER=$(awk -F: "\$3 == 1000 {print \$1}" /etc/passwd)
-if [ -z "$DETECTED_USER" ]; then
-    read -p "Target user: " TARGET_USER || TARGET_USER=""
-    if [ -z "$TARGET_USER" ]; then
-        error "User required for cleanup"
-        exit 1
+# --- 3. Remove Installer Files ---
+CLEANUP_INSTALLER="${CLEANUP_INSTALLER:-}"
+if [ "$CLEANUP_INSTALLER" = "1" ] || { [ "$CLEANUP_INSTALLER" != "0" ] && [ "${SHORIN_BOOTSTRAP:-0}" = "1" ]; }; then
+    # Detect user ID 1000 or prompt manually
+    DETECTED_USER=$(awk -F: "\$3 == 1000 {print \$1}" /etc/passwd)
+    if [ -z "$DETECTED_USER" ]; then
+        read -p "Target user: " TARGET_USER || TARGET_USER=""
+        if [ -z "$TARGET_USER" ]; then
+            error "User required for cleanup"
+            exit 1
+        fi
+    else
+        TARGET_USER="$DETECTED_USER"
+    fi
+    HOME_DIR="/home/$TARGET_USER"
+
+    if [ -d "/root/shorin-arch-setup" ]; then
+        log "Removing installer from /root..."
+        cd /
+        rm -rfv /root/shorin-arch-setup
+    fi
+
+    if [ -d "$HOME_DIR/shorin-arch-setup" ]; then
+        log "Removing installer from $HOME_DIR/shorin-arch-setup"
+        rm -rfv "$HOME_DIR/shorin-arch-setup"
+    else
+        log "Repo cleanup skipped."
+        log "please remove the folder yourself."
     fi
 else
-    TARGET_USER="$DETECTED_USER"
-fi
-HOME_DIR="/home/$TARGET_USER"
-# --- 3. Remove Installer Files ---
-if [ -d "/root/shorin-arch-setup" ]; then
-    log "Removing installer from /root..."
-    cd /
-    rm -rfv /root/shorin-arch-setup
-fi
-
-if [ -d "$HOME_DIR/shorin-arch-setup" ]; then
-    log "Removing installer from $HOME_DIR/shorin-arch-setup"
-    rm -rfv "$HOME_DIR/shorin-arch-setup"
-else
-    log "Repo cleanup skipped."
-    log "please remove the folder yourself."
+    log "Installer cleanup skipped (set CLEANUP_INSTALLER=1 to enable)."
 fi
 
 #--- 清理无用的下载残留

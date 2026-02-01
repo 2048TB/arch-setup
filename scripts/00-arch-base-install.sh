@@ -23,6 +23,25 @@ readonly PACSTRAP_BASE_PKGS="base base-devel linux linux-firmware btrfs-progs ne
 
 check_root
 
+# --- Runtime Options ---
+DRY_RUN="${DRY_RUN:-0}"
+REQUIRE_TARGET_DISK="${REQUIRE_TARGET_DISK:-0}"
+FORCE_PARTITION="${FORCE_PARTITION:-0}"
+FORCE_FORMAT="${FORCE_FORMAT:-0}"
+RUNTIME_STATE_DIR="/run/shorin-installer"
+mkdir -p "$RUNTIME_STATE_DIR"
+
+# --- Cleanup on Error ---
+cleanup_on_error() {
+    local line="${1:-?}"
+    warn "Install failed at line $line. Attempting to unmount /mnt..."
+    umount -R /mnt 2>/dev/null || true
+    on_error "$line"
+}
+if [ "${STRICT_MODE_ERR_TRAP:-1}" = "1" ]; then
+    trap 'cleanup_on_error ${LINENO}' ERR
+fi
+
 # ==============================================================================
 # STEP 0: ISO Environment Detection
 # ==============================================================================
@@ -198,6 +217,10 @@ select_disk() {
 
 TARGET_DISK="${TARGET_DISK:-}"
 if [ -z "$TARGET_DISK" ]; then
+    if [ "$REQUIRE_TARGET_DISK" = "1" ]; then
+        error "REQUIRE_TARGET_DISK=1 but TARGET_DISK is not set."
+        exit 1
+    fi
     # 交互式选择
     select_disk
 else
@@ -313,6 +336,25 @@ fi
 
 success "Disk selection confirmed: $TARGET_DISK"
 
+if [ "$DRY_RUN" = "1" ]; then
+    warn "DRY_RUN=1 enabled. No disk changes will be made."
+    echo ""
+    echo "Planned commands:"
+    echo "  sgdisk -Z $TARGET_DISK"
+    echo "  sgdisk -o $TARGET_DISK"
+    if [ "$BOOT_MODE" = "uefi" ]; then
+        echo "  sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:\"EFI\" $TARGET_DISK"
+        echo "  sgdisk -n 2:0:0 -t 2:8300 -c 2:\"Linux\" $TARGET_DISK"
+        echo "  mkfs.fat -F32 <EFI_PART>"
+    else
+        echo "  sgdisk -n 1:0:+${BIOS_BOOT_SIZE} -t 1:ef02 -c 1:\"BIOS\" $TARGET_DISK"
+        echo "  sgdisk -n 2:0:0 -t 2:8300 -c 2:\"Linux\" $TARGET_DISK"
+    fi
+    echo "  mkfs.btrfs -f -L \"ArchRoot\" <ROOT_PART>"
+    echo ""
+    exit 0
+fi
+
 # ==============================================================================
 # STEP 2: Partitioning
 # ==============================================================================
@@ -324,27 +366,33 @@ if ! command -v sgdisk &>/dev/null; then
     pacman -Sy --noconfirm gptfdisk
 fi
 
-log "Creating GPT partition table..."
-exe sgdisk -Z "$TARGET_DISK"  # 清除分区表
-exe sgdisk -o "$TARGET_DISK"  # 创建GPT
-
-if [ "$BOOT_MODE" = "uefi" ]; then
-    log "Creating EFI partition (${EFI_SIZE})..."
-    exe sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:"EFI" "$TARGET_DISK"
-
-    log "Creating Btrfs partition (remaining space)..."
-    exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+PARTITION_MARKER="$RUNTIME_STATE_DIR/partitioned-$(basename "$TARGET_DISK")"
+if [ -f "$PARTITION_MARKER" ] && [ "$FORCE_PARTITION" != "1" ]; then
+    warn "Partition step already completed. Skipping (set FORCE_PARTITION=1 to recreate)."
 else
-    log "Creating BIOS boot partition (${BIOS_BOOT_SIZE})..."
-    exe sgdisk -n 1:0:+${BIOS_BOOT_SIZE} -t 1:ef02 -c 1:"BIOS" "$TARGET_DISK"
+    log "Creating GPT partition table..."
+    exe sgdisk -Z "$TARGET_DISK"  # 清除分区表
+    exe sgdisk -o "$TARGET_DISK"  # 创建GPT
 
-    log "Creating Btrfs partition (remaining space)..."
-    exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+    if [ "$BOOT_MODE" = "uefi" ]; then
+        log "Creating EFI partition (${EFI_SIZE})..."
+        exe sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:"EFI" "$TARGET_DISK"
+
+        log "Creating Btrfs partition (remaining space)..."
+        exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+    else
+        log "Creating BIOS boot partition (${BIOS_BOOT_SIZE})..."
+        exe sgdisk -n 1:0:+${BIOS_BOOT_SIZE} -t 1:ef02 -c 1:"BIOS" "$TARGET_DISK"
+
+        log "Creating Btrfs partition (remaining space)..."
+        exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
+    fi
+
+    # 通知内核重新读取分区表
+    exe partprobe "$TARGET_DISK"
+    sleep 2
+    touch "$PARTITION_MARKER"
 fi
-
-# 通知内核重新读取分区表
-exe partprobe "$TARGET_DISK"
-sleep 2
 
 # 分区设备名（处理nvme、mmcblk和sata差异）
 if [[ "$TARGET_DISK" =~ (nvme|mmcblk) ]]; then
@@ -359,6 +407,15 @@ if [ "$BOOT_MODE" = "uefi" ]; then
     info_kv "EFI Partition" "$EFI_PART"
 fi
 info_kv "Root Partition" "$ROOT_PART"
+
+if [ "$BOOT_MODE" = "uefi" ] && [ ! -b "$EFI_PART" ]; then
+    error "EFI partition not found: $EFI_PART (set FORCE_PARTITION=1 to recreate)"
+    exit 1
+fi
+if [ ! -b "$ROOT_PART" ]; then
+    error "Root partition not found: $ROOT_PART (set FORCE_PARTITION=1 to recreate)"
+    exit 1
+fi
 
 # ==============================================================================
 # STEP 3: Format Partitions
@@ -376,15 +433,21 @@ if [ "$BOOT_MODE" = "uefi" ] && findmnt -n -o TARGET "$EFI_PART" >/dev/null 2>&1
     exe umount "$EFI_PART"
 fi
 
-if [ "$BOOT_MODE" = "uefi" ]; then
-    log "Formatting EFI partition (FAT32)..."
-    exe mkfs.fat -F32 "$EFI_PART"
+FORMAT_MARKER="$RUNTIME_STATE_DIR/formatted-$(basename "$TARGET_DISK")"
+if [ -f "$FORMAT_MARKER" ] && [ "$FORCE_FORMAT" != "1" ]; then
+    warn "Format step already completed. Skipping (set FORCE_FORMAT=1 to reformat)."
+else
+    if [ "$BOOT_MODE" = "uefi" ]; then
+        log "Formatting EFI partition (FAT32)..."
+        exe mkfs.fat -F32 "$EFI_PART"
+    fi
+
+    log "Formatting Root partition (Btrfs)..."
+    exe mkfs.btrfs -f -L "ArchRoot" "$ROOT_PART"
+
+    touch "$FORMAT_MARKER"
+    success "Partitions formatted."
 fi
-
-log "Formatting Root partition (Btrfs)..."
-exe mkfs.btrfs -f -L "ArchRoot" "$ROOT_PART"
-
-success "Partitions formatted."
 
 # ==============================================================================
 # STEP 4: Btrfs Subvolumes Setup
@@ -465,6 +528,9 @@ log "Creating chroot continuation script..."
     [ -n "${CONFIRM_DISK_WIPE:-}" ] && printf 'CONFIRM_DISK_WIPE=%q\n' "$CONFIRM_DISK_WIPE"
     [ -n "${CN_MIRROR:-}" ] && printf 'CN_MIRROR=%q\n' "$CN_MIRROR"
     [ -n "${DEBUG:-}" ] && printf 'DEBUG=%q\n' "$DEBUG"
+    [ -n "${SHORIN_BOOTSTRAP:-}" ] && printf 'SHORIN_BOOTSTRAP=%q\n' "$SHORIN_BOOTSTRAP"
+    [ -n "${CLEANUP_INSTALLER:-}" ] && printf 'CLEANUP_INSTALLER=%q\n' "$CLEANUP_INSTALLER"
+    [ -n "${CLEANUP_INSTALL_ENV:-}" ] && printf 'CLEANUP_INSTALL_ENV=%q\n' "$CLEANUP_INSTALL_ENV"
 } > /mnt/root/shorin-install.env
 
 cat > /mnt/root/continue-install.sh << 'CHROOT_EOF'
@@ -489,6 +555,8 @@ export SHORIN_PASSWORD="${SHORIN_PASSWORD:-}"
 export DESKTOP_ENV="${DESKTOP_ENV:-}"
 export CN_MIRROR="${CN_MIRROR:-0}"
 export DEBUG="${DEBUG:-0}"
+export SHORIN_BOOTSTRAP="${SHORIN_BOOTSTRAP:-0}"
+export CLEANUP_INSTALLER="${CLEANUP_INSTALLER:-}"
 
 # 基础配置
 TIMEZONE="${TIMEZONE:-Asia/Shanghai}"
@@ -554,6 +622,12 @@ if [ -n "${ROOT_PASSWORD_HASH:-}" ]; then
 else
   echo "No ROOT_PASSWORD_HASH provided. Setting password interactively:"
   passwd
+fi
+
+# Cleanup sensitive installer artifacts unless explicitly disabled
+CLEANUP_INSTALL_ENV="${CLEANUP_INSTALL_ENV:-1}"
+if [ "$CLEANUP_INSTALL_ENV" = "1" ]; then
+  rm -f /root/shorin-install.env /root/continue-install.sh
 fi
 
 echo ""

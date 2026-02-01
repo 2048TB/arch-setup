@@ -28,7 +28,7 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 
 **scripts/install.sh** - 主控制器
 - **固定Niri桌面环境**（移除选择菜单）
-- 状态文件管理（`.install_progress`）
+- 状态文件管理（`/var/lib/shorin/install_state`，兼容旧 `.install_progress`）
 - 模块动态加载
 - 使用默认镜像（移除Reflector）
 - 全局清理与快照管理
@@ -51,7 +51,7 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 **scripts/modules.sh** - 模块集合
 ```
 00-btrfs-init.sh      → Btrfs快照初始化
-01-base.sh            → 基础系统（yay, 字体, archlinuxcn）
+01-base.sh            → 基础系统（字体、可选archlinuxcn/AUR）
 02-musthave.sh        → 必备软件（音频/输入法/蓝牙/Flatpak）
 02a-dualboot-fix.sh   → 双系统修复
 03-user.sh            → 用户创建 + configs部署
@@ -64,7 +64,7 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 ### 状态管理
 
 **恢复能力**
-- 模块成功后写入 `.install_progress`
+- 模块成功后写入 `/var/lib/shorin/install_state`
 - 重新运行自动跳过已完成步骤
 
 **快照策略**
@@ -98,7 +98,7 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 - 可通过 `STRICT_MODE=0` 禁用
 
 ### 输入验证
-- TARGET_DISK 必填检查（ISO模式）
+- TARGET_DISK 必填检查（ISO模式，可用 REQUIRE_TARGET_DISK=1 强制）
 - ROOT_PASSWORD_HASH 格式验证（`$id$...`）
 - 磁盘大小检查（最小20GB）
 - 设备类型检查（mmcblk/nvme/sata）
@@ -171,15 +171,25 @@ CONFIRM_DISK_WIPE=YES \
 
 ### ISO环境专用
 - `TARGET_DISK`: 目标磁盘（可选，留空则显示交互菜单）
+- `REQUIRE_TARGET_DISK`: 必须显式指定磁盘（1/0）
 - `CONFIRM_DISK_WIPE`: 跳过确认（YES，仅非系统盘）
 - `ROOT_PASSWORD_HASH`: Root密码哈希
 - `BOOT_MODE`: uefi|bios（默认自动）
+- `DRY_RUN`: 仅打印分区/格式化命令（1/0）
+- `FORCE_PARTITION`: 强制重新分区（1/0）
+- `FORCE_FORMAT`: 强制重新格式化（1/0）
+- `CLEANUP_INSTALL_ENV`: 清理 /root/shorin-install.env 与 continue-install.sh（1/0）
 
 ### 通用参数
 - `SHORIN_USERNAME`: 用户名
 - `SHORIN_PASSWORD`: 密码
+- `DESKTOP_ENV`: 当前仅支持 niri（其他值会被忽略）
 - `CN_MIRROR`: 中国镜像（0/1）
 - `DEBUG`: 调试模式（0/1）
+- `ENABLE_ARCHLINUXCN`: 启用 archlinuxcn（默认跟随 CN_MIRROR）
+- `ENABLE_AUR_HELPERS`: 启用 yay/paru（1/0）
+- `FAILLOCK_DENY`: 失败锁定次数（0 表示禁用）
+- `CLEANUP_INSTALLER`: 安装后清理源码目录（1/0）
 
 ### 已安装系统
 - `FORCE_LOCALE_GEN`: 强制locale-gen（0/1）
@@ -202,7 +212,7 @@ CN_MIRROR=1 sudo bash scripts/install.sh
 ### 重置状态
 ```bash
 # 删除进度文件
-rm -f .install_progress
+sudo rm -f /var/lib/shorin/install_state
 ```
 
 ### 语法检查

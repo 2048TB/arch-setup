@@ -6,10 +6,10 @@ Arch Linux 全自动安装系统 - 从ISO到桌面的一键部署
 
 - 🆕 **ISO环境支持** - 从Arch ISO直接安装，自动分区+基础系统+桌面配置
 - 🎯 **模块化设计** - 独立脚本模块，可单独运行或恢复
-- 🔄 **状态管理** - 断点续传，失败自动恢复
-- 🎨 **多桌面支持** - Niri（滚动平铺）/ GNOME（现代桌面）
+- 🔄 **状态管理** - 断点续传，失败自动恢复（状态文件：`/var/lib/shorin/install_state`）
+- 🎨 **桌面环境** - 当前固定 Niri（GNOME/None 预留）
 - 🛡️ **快照保护** - Btrfs自动快照，可一键回滚
-- 🌏 **智能镜像** - 自动检测地区优化下载源
+- 🌏 **镜像策略** - 默认官方镜像，可选 CN 镜像
 - ⚡ **GPU自适应** - 自动检测并安装AMD/Intel/NVIDIA驱动
 
 ## 🚀 快速开始
@@ -59,15 +59,15 @@ sudo bash scripts/install.sh
 
 | 桌面 | 描述 | 推荐场景 |
 |------|------|---------|
-| **Niri** | 滚动平铺窗口管理器 | 效率党、键盘流 |
-| **GNOME** | 现代桌面环境 | 新手、简洁党 |
-| **None** | 纯CLI环境 | 服务器、极简 |
+| **Niri** | 滚动平铺窗口管理器 | 效率党、键盘流（当前版本固定） |
+| **GNOME** | 现代桌面环境 | 暂不可用（预留） |
+| **None** | 纯CLI环境 | 暂不可用（预留） |
 
 ## 📦 软件清单
 
 ### 自动安装
 - **基础系统**: 字体（思源/Noto）、输入法（Fcitx5+雾凇拼音）、音频（Pipewire）
-- **AUR助手**: yay, paru
+- **AUR助手**: yay, paru（默认启用，可用 `ENABLE_AUR_HELPERS=0` 关闭）
 - **GPU驱动**: 自动检测AMD/Intel/NVIDIA
 - **Btrfs工具**: snapper, grub-btrfs
 
@@ -99,7 +99,7 @@ sudo bash scripts/install.sh
 2. 磁盘确认（需输入`yes`）
 3. 基础安装（pacstrap核心包）
 4. chroot继续配置
-5. 桌面选择（120s超时）
+5. 桌面固定为 Niri（当前版本）
 6. 用户创建（交互或环境变量）
 7. 应用选择（FZF多选）
 8. 自动重启（10s倒计时）
@@ -121,15 +121,24 @@ TARGET_DISK=/dev/nvme0n1          # 必填
 CONFIRM_DISK_WIPE=YES             # 跳过确认
 ROOT_PASSWORD_HASH='$6$...'       # root密码哈希
 BOOT_MODE="uefi"                  # uefi|bios（默认自动）
+DRY_RUN=1                         # 只打印分区/格式化命令，不执行
+REQUIRE_TARGET_DISK=1             # 必须显式指定 TARGET_DISK
+FORCE_PARTITION=1                 # 强制重新分区
+FORCE_FORMAT=1                    # 强制重新格式化
+CLEANUP_INSTALL_ENV=0             # 保留 /root/shorin-install.env
 ```
 
 ### 通用参数
 ```bash
 SHORIN_USERNAME="user"            # 用户名
 SHORIN_PASSWORD="pass"            # 密码
-DESKTOP_ENV="niri"                # niri|gnome|none
+DESKTOP_ENV="niri"                # 当前版本仅支持 niri（其他值会被忽略）
 CN_MIRROR=1                       # 中国镜像
 DEBUG=1                           # 调试模式
+ENABLE_ARCHLINUXCN=1              # 启用 archlinuxcn（默认跟随 CN_MIRROR）
+ENABLE_AUR_HELPERS=1              # 启用 yay/paru
+FAILLOCK_DENY=5                   # 失败锁定次数（0 表示禁用）
+CLEANUP_INSTALLER=1               # 安装后清理源码目录
 ```
 
 ### 已安装系统

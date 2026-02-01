@@ -26,6 +26,7 @@ export STRICT_MODE="${STRICT_MODE:-1}"
 export STRICT_MODE_ERR_TRAP="${STRICT_MODE_ERR_TRAP:-1}"
 export DEBUG="${DEBUG:-0}"
 export CN_MIRROR="${CN_MIRROR:-0}"
+export SHORIN_BOOTSTRAP=1
 
 echo -e "\033[0;34m>>> Preparing to install from branch: $TARGET_BRANCH\033[0m"
 

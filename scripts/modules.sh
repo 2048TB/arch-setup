@@ -38,32 +38,58 @@ case "$MODULE" in
         
         log "Configuring Snapper for Root..."
         if ! snapper list-configs | grep -q "^root "; then
-            # Cleanup existing dir to allow subvolume creation
-            if [ -d "/.snapshots" ]; then
+            SNAPSHOTS_MOUNTED=false
+            if mountpoint -q /.snapshots && findmnt -n -o FSTYPE /.snapshots | grep -q "btrfs"; then
+                SNAPSHOTS_MOUNTED=true
+                log "Detected existing /.snapshots mountpoint. Preserving it."
+            fi
+
+            # Cleanup existing dir to allow subvolume creation (only if not mounted)
+            if [ "$SNAPSHOTS_MOUNTED" = false ] && [ -d "/.snapshots" ]; then
                 exe_silent umount /.snapshots
                 exe_silent rm -rf /.snapshots
             fi
             
             if exe snapper -c root create-config /; then
                 success "Config 'root' created."
-                
-                # Apply Retention Policy
-                exe snapper -c root set-config \
-                    ALLOW_GROUPS="wheel" \
-                    TIMELINE_CREATE="yes" \
-                    TIMELINE_CLEANUP="yes" \
-                    NUMBER_LIMIT="10" \
-                    NUMBER_MIN_AGE="0" \
-                    NUMBER_LIMIT_IMPORTANT="5" \
-                    TIMELINE_LIMIT_HOURLY="3" \
-                    TIMELINE_LIMIT_DAILY="0" \
-                    TIMELINE_LIMIT_WEEKLY="0" \
-                    TIMELINE_LIMIT_MONTHLY="0" \
-                    TIMELINE_LIMIT_YEARLY="0"
-    
-                exe systemctl enable snapper-cleanup.timer
-                exe systemctl enable snapper-timeline.timer
+            else
+                warn "snapper create-config failed. Attempting manual config for existing snapshots."
+                if [ "$SNAPSHOTS_MOUNTED" = true ] && [ -f /etc/snapper/config-templates/default ]; then
+                    exe mkdir -p /etc/snapper/configs
+                    exe cp /etc/snapper/config-templates/default /etc/snapper/configs/root
+                    if grep -q "^SUBVOLUME=" /etc/snapper/configs/root; then
+                        exe sed -i 's|^SUBVOLUME=.*|SUBVOLUME=\"/\"|' /etc/snapper/configs/root
+                    else
+                        echo 'SUBVOLUME="/"' >> /etc/snapper/configs/root
+                    fi
+                    if grep -q "^FSTYPE=" /etc/snapper/configs/root; then
+                        exe sed -i 's|^FSTYPE=.*|FSTYPE=\"btrfs\"|' /etc/snapper/configs/root
+                    else
+                        echo 'FSTYPE="btrfs"' >> /etc/snapper/configs/root
+                    fi
+                    success "Config 'root' created (manual)."
+                else
+                    error "Failed to create Snapper config for root."
+                    exit 1
+                fi
             fi
+
+            # Apply Retention Policy
+            exe snapper -c root set-config \
+                ALLOW_GROUPS="wheel" \
+                TIMELINE_CREATE="yes" \
+                TIMELINE_CLEANUP="yes" \
+                NUMBER_LIMIT="10" \
+                NUMBER_MIN_AGE="0" \
+                NUMBER_LIMIT_IMPORTANT="5" \
+                TIMELINE_LIMIT_HOURLY="3" \
+                TIMELINE_LIMIT_DAILY="0" \
+                TIMELINE_LIMIT_WEEKLY="0" \
+                TIMELINE_LIMIT_MONTHLY="0" \
+                TIMELINE_LIMIT_YEARLY="0"
+
+            exe systemctl enable snapper-cleanup.timer
+            exe systemctl enable snapper-timeline.timer
         else
             log "Config 'root' already exists."
         fi
@@ -82,7 +108,9 @@ case "$MODULE" in
         
         if ! snapper list-configs | grep -q "^home "; then
             # Cleanup .snapshots in home if exists
-            if [ -d "/home/.snapshots" ]; then
+            if mountpoint -q /home/.snapshots && findmnt -n -o FSTYPE /home/.snapshots | grep -q "btrfs"; then
+                log "Detected existing /home/.snapshots mountpoint. Preserving it."
+            elif [ -d "/home/.snapshots" ]; then
                 exe_silent umount /home/.snapshots
                 exe_silent rm -rf /home/.snapshots
             fi
@@ -161,6 +189,7 @@ case "$MODULE" in
     check_root
     
     log "Starting Phase 1: Base System Configuration..."
+    CN_MIRROR=${CN_MIRROR:-0}
     
     # ------------------------------------------------------------------------------
     # 1. Set Global Default Editor
@@ -242,11 +271,13 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     section "Step 4/6" "ArchLinuxCN Repository"
     
-    if grep -q "\[archlinuxcn\]" /etc/pacman.conf; then
-        success "archlinuxcn repository already exists."
-    else
-        log "Adding archlinuxcn mirrors to pacman.conf..."
-        cat <<-'EOT' >> /etc/pacman.conf
+    ENABLE_ARCHLINUXCN="${ENABLE_ARCHLINUXCN:-$CN_MIRROR}"
+    if [ "$ENABLE_ARCHLINUXCN" = "1" ]; then
+        if grep -q "\[archlinuxcn\]" /etc/pacman.conf; then
+            success "archlinuxcn repository already exists."
+        else
+            log "Adding archlinuxcn mirrors to pacman.conf..."
+            cat <<-'EOT' >> /etc/pacman.conf
 	
 	[archlinuxcn]
 	Server = https://mirrors.ustc.edu.cn/archlinuxcn/$arch
@@ -254,22 +285,30 @@ case "$MODULE" in
 	Server = https://mirrors.hit.edu.cn/archlinuxcn/$arch
 	Server = https://repo.huaweicloud.com/archlinuxcn/$arch
 	EOT
-        success "Mirrors added."
+            success "Mirrors added."
+        fi
+        
+        log "Installing archlinuxcn-keyring..."
+        # Keyring installation often needs -Sy specifically, but -Syu is safe too
+        exe pacman -Syu --noconfirm archlinuxcn-keyring
+        success "ArchLinuxCN configured."
+    else
+        log "ArchLinuxCN disabled (ENABLE_ARCHLINUXCN=0)."
     fi
-    
-    log "Installing archlinuxcn-keyring..."
-    # Keyring installation often needs -Sy specifically, but -Syu is safe too
-    exe pacman -Syu --noconfirm archlinuxcn-keyring
-    success "ArchLinuxCN configured."
     
     # ------------------------------------------------------------------------------
     # 5. Install AUR Helpers
     # ------------------------------------------------------------------------------
     section "Step 5/6" "AUR Helpers"
     
-    log "Installing yay and paru..."
-    exe pacman -S --noconfirm --needed base-devel yay paru
-    success "AUR helpers installed."
+    ENABLE_AUR_HELPERS="${ENABLE_AUR_HELPERS:-1}"
+    if [ "$ENABLE_AUR_HELPERS" = "1" ]; then
+        log "Installing yay and paru..."
+        exe pacman -S --noconfirm --needed base-devel yay paru
+        success "AUR helpers installed."
+    else
+        log "AUR helpers disabled (ENABLE_AUR_HELPERS=0)."
+    fi
     
     log "Module 01 completed."
     ;;
@@ -736,10 +775,19 @@ case "$MODULE" in
     FAILLOCK_CONF="/etc/security/faillock.conf"
     
     if [ -f "$FAILLOCK_CONF" ]; then
-        # 使用 sed 匹配被注释的(# deny =) 或者未注释的(deny =) 行，统一改为 deny = 0
-        # 正则解释: ^#\? 匹配开头可选的井号; \s* 匹配可选空格
-        exe sed -i 's/^#\?\s*deny\s*=.*/deny = 0/' "$FAILLOCK_CONF"
-        success "Account lockout disabled (deny=0)."
+        FAILLOCK_DENY="${FAILLOCK_DENY:-5}"
+        if [[ "$FAILLOCK_DENY" =~ ^[0-9]+$ ]]; then
+            # 使用 sed 匹配被注释的(# deny =) 或者未注释的(deny =) 行，统一改为 deny = X
+            # 正则解释: ^#\? 匹配开头可选的井号; \s* 匹配可选空格
+            exe sed -i "s/^#\\?\\s*deny\\s*=.*/deny = ${FAILLOCK_DENY}/" "$FAILLOCK_CONF"
+            if [ "$FAILLOCK_DENY" = "0" ]; then
+                success "Account lockout disabled (deny=0)."
+            else
+                success "Account lockout set (deny=${FAILLOCK_DENY})."
+            fi
+        else
+            warn "Invalid FAILLOCK_DENY value: $FAILLOCK_DENY (expected number). Skipping."
+        fi
     else
         # 极少数情况该文件不存在，虽然在 Arch 中默认是有这个文件的
         warn "File $FAILLOCK_CONF not found. Skipping lockout config."
@@ -2014,8 +2062,13 @@ case "$MODULE" in
         fi
     fi
 
-    if [ -n "$REMOVE_MODULE" ] && [ -f "$REPO_DIR/.install_progress" ]; then
-        sed -i "/${REMOVE_MODULE//\//\\\\/}/d" "$REPO_DIR/.install_progress"
+    if [ -n "$REMOVE_MODULE" ]; then
+        STATE_FILE="/var/lib/shorin/install_state"
+        for file in "$STATE_FILE" "$REPO_DIR/.install_progress"; do
+            if [ -f "$file" ]; then
+                sed -i "/${REMOVE_MODULE//\//\\\\/}/d" "$file"
+            fi
+        done
     fi
 
     success "Rollback complete."

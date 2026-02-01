@@ -13,7 +13,7 @@ SHORIN_UTILS_LOADED=1
 SHORIN_UTILS_LOADED_PID=$$
 
 # --- Constants ---
-readonly LOG_FILE_PERMISSIONS=666
+readonly LOG_FILE_PERMISSIONS=600
 readonly TARGET_USER_UID=1000
 
 # --- 1. 颜色与样式定义 (ANSI) ---
@@ -48,7 +48,10 @@ export ARROW="${H_CYAN}➜${NC}"
 
 # 日志文件
 export TEMP_LOG_FILE="/tmp/log-shorin-arch-setup.txt"
-[ ! -f "$TEMP_LOG_FILE" ] && touch "$TEMP_LOG_FILE" && chmod "$LOG_FILE_PERMISSIONS" "$TEMP_LOG_FILE"
+if [ ! -f "$TEMP_LOG_FILE" ]; then
+    touch "$TEMP_LOG_FILE"
+fi
+chmod "$LOG_FILE_PERMISSIONS" "$TEMP_LOG_FILE"
 
 # --- 2. 基础工具 ---
 
