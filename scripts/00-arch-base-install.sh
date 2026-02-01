@@ -26,16 +26,16 @@ check_root
 # ==============================================================================
 # STEP 0: ISO Environment Detection
 # ==============================================================================
-section "Phase 0" "Environment Detection"
+section "阶段 0" "环境检测"
 
 if ! is_iso_environment; then
-    log "Not running in ISO environment. Skipping base installation."
-    log "Assuming system is already installed."
+    log "未检测到 ISO 环境，跳过基础安装。"
+    log "假定系统已安装。"
     exit 0
 fi
 
-warn "Detected Arch ISO environment."
-log "Will proceed with base system installation."
+warn "检测到 Arch ISO 环境。"
+log "将继续进行基础系统安装。"
 echo ""
 
 # ==============================================================================
@@ -108,14 +108,14 @@ get_disk_info() {
         status="${H_GREEN}✓ EMPTY${NC}"
     fi
     
-    echo "${model:-Unknown}|${size}|${type_label}|${tran_label}|${status}"
+    echo "${model:-未知}|${size}|${type_label}|${tran_label}|${status}"
 }
 
 # --- Interactive Disk Selection ---
 select_disk() {
-    section "Step 1/7" "Disk Selection"
+    section "步骤 1/7" "磁盘选择"
     
-    log "Scanning available disks..."
+    log "正在扫描可用磁盘..."
     
     # 收集所有合适的磁盘
     local -a DISKS=()
@@ -140,14 +140,14 @@ select_disk() {
     done < <(lsblk -d -n -o NAME,TYPE | awk '$2=="disk" {print $1}')
     
     if [ ${#DISKS[@]} -eq 0 ]; then
-        error "No suitable disks found (min ${MIN_DISK_SIZE_GB}GB required)."
+        error "未找到合适磁盘（至少需要 ${MIN_DISK_SIZE_GB}GB）。"
         exit 1
     fi
     
     # 绘制菜单
     local HR="────────────────────────────────────────────────────────────────────────"
     echo -e "${H_PURPLE}╭${HR}${NC}"
-    echo -e "${H_PURPLE}│${NC} ${BOLD}Select Target Disk (ALL DATA WILL BE ERASED):${NC}"
+    echo -e "${H_PURPLE}│${NC} ${BOLD}选择目标磁盘（所有数据将被清除）：${NC}"
     echo -e "${H_PURPLE}│${NC}"
     
     local idx=1
@@ -169,24 +169,24 @@ select_disk() {
     echo ""
     
     # 输入处理
-    echo -e "   ${DIM}Auto-select first disk in 60s...${NC}"
+    echo -e "   ${DIM}60 秒后自动选择第一个磁盘...${NC}"
     local choice=""
-    if ! read -t 60 -p "$(echo -e "   ${H_YELLOW}Select [1-${#DISKS[@]}] or Enter for auto: ${NC}")" choice; then
+    if ! read -t 60 -p "$(echo -e "   ${H_YELLOW}选择 [1-${#DISKS[@]}] 或回车自动： ${NC}")" choice; then
         choice=""
     fi
     
     # 默认选择第一个
     if [ -z "$choice" ]; then
         choice=1
-        log "Timeout - using first disk."
+        log "超时 - 使用第一个磁盘。"
     fi
     
     # 验证输入
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#DISKS[@]}" ]; then
         export TARGET_DISK="${DISKS[$((choice-1))]}"
-        log "Selected: $TARGET_DISK"
+        log "已选择: $TARGET_DISK"
     else
-        error "Invalid selection."
+        error "选择无效。"
         exit 1
     fi
     
@@ -201,31 +201,31 @@ if [ -z "$TARGET_DISK" ]; then
     select_disk
 else
     # 环境变量模式 - 仅做验证
-    section "Step 1/7" "Disk Selection"
-    log "Using TARGET_DISK from environment: $TARGET_DISK"
+    section "步骤 1/7" "磁盘选择"
+    log "使用环境变量 TARGET_DISK: $TARGET_DISK"
 fi
 
 # --- Validation ---
 if [ ! -b "$TARGET_DISK" ]; then
-    error "TARGET_DISK is not a block device: $TARGET_DISK"
-    log "Available disks:"
+    error "TARGET_DISK 不是块设备: $TARGET_DISK"
+    log "可用磁盘："
     lsblk -d -o NAME,SIZE,TYPE | grep disk || true
     exit 1
 fi
 
 if [ "$(lsblk -d -no TYPE "$TARGET_DISK")" != "disk" ]; then
-    error "TARGET_DISK must be a disk (not a partition): $TARGET_DISK"
+    error "TARGET_DISK 必须是磁盘（不是分区）：$TARGET_DISK"
     exit 1
 fi
 
 DISK_SIZE_BYTES=$(lsblk -d -n -o SIZE -b "$TARGET_DISK")
 DISK_SIZE_HUMAN=$(lsblk -d -n -o SIZE "$TARGET_DISK")
 
-info_kv "Target Disk" "$TARGET_DISK" "($DISK_SIZE_HUMAN)"
+info_kv "目标磁盘" "$TARGET_DISK" "($DISK_SIZE_HUMAN)"
 
 # 安全检查：确认磁盘大小
 if [ "$DISK_SIZE_BYTES" -lt "$MIN_DISK_SIZE_BYTES" ]; then
-    error "Disk too small. Minimum ${MIN_DISK_SIZE_GB}GB required."
+    error "磁盘太小，至少需要 ${MIN_DISK_SIZE_GB}GB。"
     exit 1
 fi
 
@@ -240,37 +240,37 @@ if [ -z "$BOOT_MODE" ]; then
 fi
 BOOT_MODE="${BOOT_MODE,,}"
 if [ "$BOOT_MODE" != "uefi" ] && [ "$BOOT_MODE" != "bios" ]; then
-    error "Invalid BOOT_MODE: $BOOT_MODE (use uefi|bios)"
+    error "BOOT_MODE 无效: $BOOT_MODE（可用 uefi|bios）"
     exit 1
 fi
-info_kv "Boot Mode" "$BOOT_MODE" "(auto/override)"
+info_kv "启动模式" "$BOOT_MODE" "(auto/override)"
 
 # --- Final Confirmation ---
-section "Step 1/7" "Final Confirmation"
+section "步骤 1/7" "最终确认"
 
 # 再次检查是否为系统盘
 warning_level="CRITICAL"
 if is_system_disk "$TARGET_DISK"; then
-    warning_level="${H_RED}CRITICAL: SYSTEM DISK${NC}"
+    warning_level="${H_RED}严重：系统盘${NC}"
 elif has_partitions "$TARGET_DISK"; then
-    warning_level="${H_YELLOW}WARNING: HAS DATA${NC}"
+    warning_level="${H_YELLOW}警告：有数据${NC}"
 else
-    warning_level="${H_GREEN}OK: EMPTY DISK${NC}"
+    warning_level="${H_GREEN}正常：空磁盘${NC}"
 fi
 
 echo ""
 echo -e "${H_RED}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_RED}║  ⚠️  FINAL WARNING: ALL DATA WILL BE DESTROYED  ⚠️             ║${NC}"
+echo -e "${H_RED}║  ⚠️  最终警告：所有数据将被清除  ⚠️             ║${NC}"
 echo -e "${H_RED}╠════════════════════════════════════════════════════════════════╣${NC}"
-echo -e "${H_RED}║${NC}  Disk     : ${BOLD}$TARGET_DISK${NC}"
-echo -e "${H_RED}║${NC}  Model    : $(lsblk -d -n -o MODEL "$TARGET_DISK" 2>/dev/null || echo 'Unknown')"
-echo -e "${H_RED}║${NC}  Size     : $DISK_SIZE_HUMAN"
-echo -e "${H_RED}║${NC}  Status   : $warning_level"
+echo -e "${H_RED}║${NC}  磁盘     : ${BOLD}$TARGET_DISK${NC}"
+echo -e "${H_RED}║${NC}  型号     : $(lsblk -d -n -o MODEL "$TARGET_DISK" 2>/dev/null || echo '未知')"
+echo -e "${H_RED}║${NC}  容量     : $DISK_SIZE_HUMAN"
+echo -e "${H_RED}║${NC}  状态     : $warning_level"
 
 # 显示现有分区（如果有）
 if has_partitions "$TARGET_DISK"; then
     echo -e "${H_RED}║${NC}"
-    echo -e "${H_RED}║${NC}  ${H_YELLOW}Existing partitions:${NC}"
+    echo -e "${H_RED}║${NC}  ${H_YELLOW}现有分区：${NC}"
     while IFS= read -r line; do
         echo -e "${H_RED}║${NC}    $line"
     done < <(lsblk -n -o NAME,SIZE,FSTYPE,MOUNTPOINT "$TARGET_DISK" | grep -v "^$(basename "$TARGET_DISK")")
@@ -281,23 +281,23 @@ echo ""
 
 if [ "${CONFIRM_DISK_WIPE:-}" = "YES" ]; then
     confirm="yes"
-    log "Auto-confirmed via CONFIRM_DISK_WIPE=YES"
+    log "通过 CONFIRM_DISK_WIPE=YES 自动确认"
 else
     # 系统盘需要输入完整磁盘名称
     if is_system_disk "$TARGET_DISK"; then
-        echo -e "${H_RED}>>> SYSTEM DISK DETECTED! Type the FULL disk name to confirm:${NC}"
-        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type '$TARGET_DISK' to confirm: ${NC}")" confirm; then
+        echo -e "${H_RED}>>> 检测到系统盘！请输入完整磁盘名确认：${NC}"
+        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}输入 '$TARGET_DISK' 以确认： ${NC}")" confirm; then
             confirm=""
         fi
         
         if [ "$confirm" != "$TARGET_DISK" ]; then
-            error "Confirmation failed. Installation cancelled."
+            error "确认失败，安装已取消。"
             exit 1
         fi
         confirm="yes"
     else
         # 普通磁盘只需输入 yes
-        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}Type 'yes' to ERASE $TARGET_DISK: ${NC}")" confirm; then
+        if ! read -t 30 -p "$(echo -e "   ${H_YELLOW}输入 'yes' 以清除 $TARGET_DISK： ${NC}")" confirm; then
             confirm=""
         fi
         confirm=${confirm:-NO}
@@ -305,38 +305,38 @@ else
 fi
 
 if [ "$confirm" != "yes" ]; then
-    error "Installation cancelled by user."
+    error "安装已被用户取消。"
     exit 1
 fi
 
-success "Disk selection confirmed: $TARGET_DISK"
+success "磁盘选择已确认: $TARGET_DISK"
 
 # ==============================================================================
 # STEP 2: Partitioning
 # ==============================================================================
-section "Step 2/7" "Disk Partitioning"
+section "步骤 2/7" "磁盘分区"
 
 # 确保分区工具存在
 if ! command -v sgdisk &>/dev/null; then
-    log "Installing partitioning tools..."
+    log "安装分区工具..."
     pacman -Sy --noconfirm gptfdisk
 fi
 
-log "Creating GPT partition table..."
+log "创建 GPT 分区表..."
 exe sgdisk -Z "$TARGET_DISK"  # 清除分区表
 exe sgdisk -o "$TARGET_DISK"  # 创建GPT
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    log "Creating EFI partition (${EFI_SIZE})..."
+    log "创建 EFI 分区 (${EFI_SIZE})..."
     exe sgdisk -n 1:0:+${EFI_SIZE} -t 1:ef00 -c 1:"EFI" "$TARGET_DISK"
 
-    log "Creating Btrfs partition (remaining space)..."
+    log "创建 Btrfs 分区（剩余空间）..."
     exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
 else
-    log "Creating BIOS boot partition (${BIOS_BOOT_SIZE})..."
+    log "创建 BIOS 启动分区 (${BIOS_BOOT_SIZE})..."
     exe sgdisk -n 1:0:+${BIOS_BOOT_SIZE} -t 1:ef02 -c 1:"BIOS" "$TARGET_DISK"
 
-    log "Creating Btrfs partition (remaining space)..."
+    log "创建 Btrfs 分区（剩余空间）..."
     exe sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux" "$TARGET_DISK"
 fi
 
@@ -354,44 +354,44 @@ else
 fi
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    info_kv "EFI Partition" "$EFI_PART"
+    info_kv "EFI 分区" "$EFI_PART"
 fi
-info_kv "Root Partition" "$ROOT_PART"
+info_kv "根分区" "$ROOT_PART"
 
 # ==============================================================================
 # STEP 3: Format Partitions
 # ==============================================================================
-section "Step 3/7" "Formatting"
+section "步骤 3/7" "格式化"
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    log "Formatting EFI partition (FAT32)..."
+    log "格式化 EFI 分区 (FAT32)..."
     exe mkfs.fat -F32 "$EFI_PART"
 fi
 
-log "Formatting Root partition (Btrfs)..."
+log "格式化根分区 (Btrfs)..."
 exe mkfs.btrfs -f -L "ArchRoot" "$ROOT_PART"
 
-success "Partitions formatted."
+success "分区格式化完成。"
 
 # ==============================================================================
 # STEP 4: Btrfs Subvolumes Setup
 # ==============================================================================
-section "Step 4/7" "Btrfs Subvolumes"
+section "步骤 4/7" "Btrfs 子卷"
 
-log "Mounting root for subvolume creation..."
+log "挂载根分区以创建子卷..."
 exe mount "$ROOT_PART" /mnt
 
-log "Creating Btrfs subvolumes..."
+log "创建 Btrfs 子卷..."
 exe btrfs subvolume create /mnt/@
 exe btrfs subvolume create /mnt/@home
 exe btrfs subvolume create /mnt/@snapshots
 exe btrfs subvolume create /mnt/@log
 exe btrfs subvolume create /mnt/@cache
 
-log "Unmounting to remount with subvolumes..."
+log "卸载后以子卷方式重新挂载..."
 exe umount /mnt
 
-log "Mounting subvolumes with optimal options..."
+log "使用优化参数挂载子卷..."
 BTRFS_OPTS="defaults,noatime,compress=zstd:1,space_cache=v2"
 
 exe mount -o "subvol=@,$BTRFS_OPTS" "$ROOT_PART" /mnt
@@ -402,46 +402,46 @@ exe mount -o "subvol=@log,$BTRFS_OPTS" "$ROOT_PART" /mnt/var/log
 exe mount -o "subvol=@cache,$BTRFS_OPTS" "$ROOT_PART" /mnt/var/cache
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    log "Mounting EFI partition..."
+    log "挂载 EFI 分区..."
     exe mount "$EFI_PART" /mnt/boot
 fi
 
-success "Btrfs layout configured."
+success "Btrfs 布局配置完成。"
 lsblk "$TARGET_DISK"
 
 # ==============================================================================
 # STEP 5: Base System Installation
 # ==============================================================================
-section "Step 5/7" "Installing Base System"
+section "步骤 5/7" "安装基础系统"
 
-log "Running pacstrap (This may take several minutes)..."
+log "运行 pacstrap（可能需要几分钟）..."
 if exe pacstrap /mnt $PACSTRAP_BASE_PKGS; then
-    success "Base system installed."
+    success "基础系统安装完成。"
 else
-    error "pacstrap failed. Check network connection."
+    error "pacstrap 失败，请检查网络。"
     exit 1
 fi
 
 # ==============================================================================
 # STEP 6: System Configuration
 # ==============================================================================
-section "Step 6/7" "Generating fstab"
+section "步骤 6/7" "生成 fstab"
 
-log "Generating fstab with UUIDs..."
+log "使用 UUID 生成 fstab..."
 exe genfstab -U /mnt > /mnt/etc/fstab
 
-log "Verifying fstab..."
+log "校验 fstab..."
 cat /mnt/etc/fstab
 
 # ==============================================================================
 # STEP 7: Prepare for Chroot Continuation
 # ==============================================================================
-section "Step 7/7" "Chroot Setup"
+section "步骤 7/7" "Chroot 配置"
 
-log "Copying installer to /mnt/root..."
+log "复制安装器到 /mnt/root..."
 exe cp -r "$PARENT_DIR" /mnt/root/
 
-log "Creating chroot continuation script..."
+log "创建 chroot 继续脚本..."
 {
     printf 'TARGET_DISK=%q\n' "$TARGET_DISK"
     printf 'BOOT_MODE=%q\n' "$BOOT_MODE"
@@ -512,12 +512,12 @@ systemctl enable NetworkManager
 # GRUB安装
 if [ "${BOOT_MODE}" = "bios" ]; then
   if ! grub-install --target=i386-pc "${TARGET_DISK}"; then
-    echo "ERROR: GRUB BIOS installation failed"
+    echo "错误：GRUB BIOS 安装失败"
     exit 1
   fi
 else
   if ! grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB; then
-    echo "ERROR: GRUB UEFI installation failed"
+    echo "错误：GRUB UEFI 安装失败"
     exit 1
   fi
 fi
@@ -527,25 +527,25 @@ if [ -n "${ROOT_PASSWORD_HASH:-}" ]; then
   # 验证格式：$id$salt$hash（如 $6$rounds=5000$salt$hash）
   if [[ "$ROOT_PASSWORD_HASH" =~ ^\$[0-9]+\$[^\$]+\$ ]]; then
     if ! echo "root:${ROOT_PASSWORD_HASH}" | chpasswd -e 2>&1; then
-      echo "ERROR: Failed to set root password via chpasswd"
-      echo "Hash format may be invalid. Generate with: openssl passwd -6 'yourpassword'"
+      echo "错误：通过 chpasswd 设置 root 密码失败"
+      echo "Hash 格式可能无效。可用以下命令生成：openssl passwd -6 'yourpassword'"
       exit 1
     fi
-    echo "Root password set from ROOT_PASSWORD_HASH"
+    echo "已使用 ROOT_PASSWORD_HASH 设置 root 密码"
   else
-    echo "ERROR: Invalid ROOT_PASSWORD_HASH format"
-    echo "Expected format: \$id\$salt\$hash"
-    echo "Generate with: openssl passwd -6 'yourpassword'"
+    echo "错误：ROOT_PASSWORD_HASH 格式无效"
+    echo "期望格式：\$id\$salt\$hash"
+    echo "生成命令：openssl passwd -6 'yourpassword'"
     exit 1
   fi
 else
-  echo "No ROOT_PASSWORD_HASH provided. Setting password interactively:"
+  echo "未提供 ROOT_PASSWORD_HASH，将交互式设置密码："
   passwd
 fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Base system configured. Now running Shorin Setup..."
+echo "  基础系统已配置，开始运行 Shorin Setup..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -562,34 +562,34 @@ chmod +x /mnt/root/continue-install.sh
 # ==============================================================================
 echo ""
 echo -e "${H_GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_GREEN}║  Base Installation Complete                                    ║${NC}"
-echo -e "${H_GREEN}║  Now entering chroot to continue Shorin Setup...               ║${NC}"
+echo -e "${H_GREEN}║  基础安装完成                                                  ║${NC}"
+echo -e "${H_GREEN}║  即将进入 chroot 继续 Shorin Setup...                           ║${NC}"
 echo -e "${H_GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-log "Entering arch-chroot..."
+log "进入 arch-chroot..."
 sleep 2
 
 # 执行chroot内的继续脚本
 if arch-chroot /mnt /root/continue-install.sh; then
-    success "Chroot installation completed."
+    success "Chroot 安装完成。"
 else
-    error "Chroot installation failed."
-    warn "You can manually chroot to fix: arch-chroot /mnt"
+    error "Chroot 安装失败。"
+    warn "可手动 chroot 修复：arch-chroot /mnt"
     exit 1
 fi
 
 # ==============================================================================
 # Cleanup
 # ==============================================================================
-log "Unmounting filesystems..."
+log "卸载文件系统..."
 umount -R /mnt 2>/dev/null || true
 
 echo ""
 echo -e "${H_GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_GREEN}║  INSTALLATION COMPLETE                                         ║${NC}"
-echo -e "${H_GREEN}║  You can now reboot into your new Arch system.                 ║${NC}"
+echo -e "${H_GREEN}║  安装完成                                                      ║${NC}"
+echo -e "${H_GREEN}║  现在可以重启进入新 Arch 系统。                                ║${NC}"
 echo -e "${H_GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-log "Hint: Remove installation media before reboot."
+log "提示：重启前请移除安装介质。"

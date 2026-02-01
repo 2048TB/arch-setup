@@ -13,7 +13,7 @@ STATE_FILE="$REPO_DIR/.install_progress"
 if [ -f "$SCRIPTS_DIR/00-utils.sh" ]; then
     source "$SCRIPTS_DIR/00-utils.sh"
 else
-    echo "Error: 00-utils.sh not found."
+    echo "错误：未找到 00-utils.sh。"
     exit 1
 fi
 # --- Config & Strict Mode ---
@@ -44,7 +44,7 @@ export CN_MIRROR=${CN_MIRROR:-0}
 check_root
 chmod +x "$SCRIPTS_DIR"/*.sh
 if [ ! -f "$SCRIPTS_DIR/modules.sh" ]; then
-    error "modules.sh not found in $SCRIPTS_DIR"
+    error "在 $SCRIPTS_DIR 找不到 modules.sh"
     exit 1
 fi
 
@@ -90,7 +90,7 @@ show_banner() {
         2) banner3 ;;
     esac
     echo -e "${NC}"
-    echo -e "${DIM}   :: Arch Linux Automation Protocol :: v2.1 ::${NC}"
+    echo -e "${DIM}   :: Arch Linux 自动化协议 :: v2.1 ::${NC}"
     echo ""
 }
 
@@ -110,7 +110,7 @@ select_desktop() {
     local HR="──────────────────────────────────────────────────"
     
     echo -e "${H_PURPLE}╭${HR}${NC}"
-    echo -e "${H_PURPLE}│${NC} ${BOLD}Choose your Desktop Environment:${NC}"
+    echo -e "${H_PURPLE}│${NC} ${BOLD}选择桌面环境：${NC}"
     echo -e "${H_PURPLE}│${NC}" # 空行分隔
 
     local idx=1
@@ -125,8 +125,8 @@ select_desktop() {
     echo ""
     
     # 3. 输入处理
-    echo -e "   ${DIM}Waiting for input (Timeout: 2 mins)...${NC}"
-    if ! read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice; then
+    echo -e "   ${DIM}等待输入（超时：2 分钟）...${NC}"
+    if ! read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}请选择 [1-${#OPTIONS[@]}]： ${NC}")" choice; then
         choice=""
     fi
     
@@ -139,30 +139,30 @@ select_desktop() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#OPTIONS[@]}" ]; then
         local selected_opt="${OPTIONS[$((choice-1))]}"
         export DESKTOP_ENV="${selected_opt##*|}" # 提取 ID
-        log "Selected: ${selected_opt%%|*}"
+        log "已选择: ${selected_opt%%|*}"
     else
-        error "Invalid selection."
+        error "选择无效。"
         exit 1
     fi
     sleep 0.5
 }
 sys_dashboard() {
-    echo -e "${H_BLUE}╔════ SYSTEM DIAGNOSTICS ══════════════════════════════╗${NC}"
-    echo -e "${H_BLUE}║${NC} ${BOLD}Kernel${NC}   : $(uname -r)"
-    echo -e "${H_BLUE}║${NC} ${BOLD}User${NC}     : $(whoami)"
-    echo -e "${H_BLUE}║${NC} ${BOLD}Desktop${NC}  : ${H_MAGENTA}${DESKTOP_ENV^^}${NC}"
+    echo -e "${H_BLUE}╔════ 系统诊断 ══════════════════════════════╗${NC}"
+    echo -e "${H_BLUE}║${NC} ${BOLD}内核${NC}     : $(uname -r)"
+    echo -e "${H_BLUE}║${NC} ${BOLD}用户${NC}     : $(whoami)"
+    echo -e "${H_BLUE}║${NC} ${BOLD}桌面${NC}     : ${H_MAGENTA}${DESKTOP_ENV^^}${NC}"
     
     if [ "$CN_MIRROR" == "1" ]; then
-        echo -e "${H_BLUE}║${NC} ${BOLD}Network${NC}  : ${H_YELLOW}CN Optimized (Manual)${NC}"
+        echo -e "${H_BLUE}║${NC} ${BOLD}网络${NC}     : ${H_YELLOW}中国镜像优化（手动）${NC}"
     elif [ "$DEBUG" == "1" ]; then
-        echo -e "${H_BLUE}║${NC} ${BOLD}Network${NC}  : ${H_RED}DEBUG FORCE (CN Mode)${NC}"
+        echo -e "${H_BLUE}║${NC} ${BOLD}网络${NC}     : ${H_RED}DEBUG 强制（CN 模式）${NC}"
     else
-        echo -e "${H_BLUE}║${NC} ${BOLD}Network${NC}  : Global Default"
+        echo -e "${H_BLUE}║${NC} ${BOLD}网络${NC}     : 全球默认"
     fi
     
     if [ -f "$STATE_FILE" ]; then
         done_count=$(wc -l < "$STATE_FILE")
-        echo -e "${H_BLUE}║${NC} ${BOLD}Progress${NC} : Resuming ($done_count steps recorded)"
+        echo -e "${H_BLUE}║${NC} ${BOLD}进度${NC}     : 继续执行（已记录 $done_count 步）"
     fi
     echo -e "${H_BLUE}╚══════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -179,8 +179,8 @@ fi
 
 # 如果在ISO环境，先运行基础安装模块
 if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
-    section "ISO Mode" "Base System Installation Required"
-    log "Running base installation module..."
+    section "ISO 模式" "需要基础系统安装"
+    log "运行基础安装模块..."
     
     BASE_INSTALL_SCRIPT="$SCRIPTS_DIR/00-arch-base-install.sh"
     if [ -f "$BASE_INSTALL_SCRIPT" ]; then
@@ -190,8 +190,8 @@ if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
         # 此时SKIP_BASE_INSTALL=1，不会再次进入这个分支
         exit 0
     else
-        error "ISO detected but base installation script missing: $BASE_INSTALL_SCRIPT"
-        warn "Please install Arch Linux manually first, then run this script."
+        error "检测到 ISO，但基础安装脚本缺失：$BASE_INSTALL_SCRIPT"
+        warn "请先手动安装 Arch Linux，再运行此脚本。"
         exit 1
     fi
 fi
@@ -200,10 +200,10 @@ if [ -n "${DESKTOP_ENV:-}" ]; then
     DESKTOP_ENV="${DESKTOP_ENV,,}"
     case "$DESKTOP_ENV" in
         niri|gnome|none)
-            log "Using DESKTOP_ENV from config/env: $DESKTOP_ENV"
+            log "使用配置/环境变量 DESKTOP_ENV: $DESKTOP_ENV"
             ;;
         *)
-            error "Invalid DESKTOP_ENV: $DESKTOP_ENV (use niri|gnome|none)"
+            error "DESKTOP_ENV 无效: $DESKTOP_ENV（可用 niri|gnome|none）"
             exit 1
             ;;
     esac
@@ -233,10 +233,10 @@ case "$DESKTOP_ENV" in
         BASE_MODULES+=("04d-gnome.sh")
         ;;
     none)
-        log "Skipping Desktop Environment installation."
+        log "跳过桌面环境安装。"
         ;;
     *)
-        warn "Unknown selection, skipping desktop setup."
+        warn "未知选择，跳过桌面安装。"
         ;;
 esac
 
@@ -253,19 +253,19 @@ if [ ! -f "$STATE_FILE" ]; then touch "$STATE_FILE"; fi
 TOTAL_STEPS=${#MODULES[@]}
 CURRENT_STEP=0
 
-log "Initializing installer sequence..."
+log "初始化安装流程..."
 sleep 0.5
 
 # --- Reflector Mirror Update (State Aware) ---
-section "Pre-Flight" "Mirrorlist Optimization"
+section "预检" "镜像列表优化"
 
 # [MODIFIED] Check if already done
 if grep -q "^REFLECTOR_DONE$" "$STATE_FILE"; then
-    echo -e "   ${H_GREEN}✔${NC} Mirrorlist previously optimized."
-    echo -e "   ${DIM}   Skipping Reflector steps (Resume Mode)...${NC}"
+    echo -e "   ${H_GREEN}✔${NC} 镜像列表已优化。"
+    echo -e "   ${DIM}   跳过 Reflector 步骤（续跑模式）...${NC}"
 else
     # --- Start Reflector Logic ---
-    log "Checking Reflector..."
+    log "检查 Reflector..."
     exe pacman -S --noconfirm --needed reflector
 
     CURRENT_TZ=$(readlink -f /etc/localtime)
@@ -274,43 +274,43 @@ else
     if [[ "$CURRENT_TZ" == *"Shanghai"* ]]; then
         echo ""
         echo -e "${H_YELLOW}╔══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${H_YELLOW}║  DETECTED TIMEZONE: Asia/Shanghai                                ║${NC}"
-        echo -e "${H_YELLOW}║  Refreshing mirrors in China can be slow.                        ║${NC}"
-        echo -e "${H_YELLOW}║  Do you want to force refresh mirrors with Reflector?            ║${NC}"
+        echo -e "${H_YELLOW}║  检测到时区：Asia/Shanghai                                      ║${NC}"
+        echo -e "${H_YELLOW}║  在中国刷新镜像可能较慢。                                       ║${NC}"
+        echo -e "${H_YELLOW}║  是否强制使用 Reflector 刷新镜像？                               ║${NC}"
         echo -e "${H_YELLOW}╚══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         
-        if ! read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in ${REFLECTOR_TIMEOUT}s): ${NC}")" choice; then
+        if ! read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}运行 Reflector？[y/N]（默认 N，${REFLECTOR_TIMEOUT}s 后）： ${NC}")" choice; then
             echo ""
         fi
         choice=${choice:-N}
         
         if [[ "$choice" =~ ^[Yy]$ ]]; then
-            log "Running Reflector for China..."
+            log "为中国运行 Reflector..."
             if exe reflector $REFLECTOR_ARGS -c China; then
-                success "Mirrors updated."
+                success "镜像已更新。"
             else
-                warn "Reflector failed. Continuing with existing mirrors."
+                warn "Reflector 失败，继续使用现有镜像。"
             fi
         else
-            log "Skipping mirror refresh."
+            log "跳过镜像刷新。"
         fi
     else
-        log "Detecting location for optimization..."
+        log "检测地区用于优化..."
         COUNTRY_CODE=$(curl -s --max-time 2 https://ipinfo.io/country || true)
         
         if [ -n "$COUNTRY_CODE" ]; then
-            info_kv "Country" "$COUNTRY_CODE" "(Auto-detected)"
-            log "Running Reflector for $COUNTRY_CODE..."
+            info_kv "国家" "$COUNTRY_CODE" "(自动检测)"
+            log "为 $COUNTRY_CODE 运行 Reflector..."
             if ! exe reflector $REFLECTOR_ARGS -c "$COUNTRY_CODE"; then
-                warn "Country specific refresh failed. Trying global speed test..."
+                warn "国家镜像刷新失败，尝试全球测速..."
                 exe reflector $REFLECTOR_ARGS
             fi
         else
-            warn "Could not detect country. Running global speed test..."
+            warn "无法检测国家，运行全球测速..."
             exe reflector $REFLECTOR_ARGS
         fi
-        success "Mirrorlist optimized."
+        success "镜像列表优化完成。"
     fi
     # --- End Reflector Logic ---
 
@@ -320,19 +320,19 @@ fi
 
 # ---- update keyring-----
 
-section "Pre-Flight" "Update Keyring"
+section "预检" "更新 keyring"
 
 exe pacman -Sy
 exe pacman -S --noconfirm archlinux-keyring
 
 # --- Global Update ---
-section "Pre-Flight" "System update"
-log "Ensuring system is up-to-date..."
+section "预检" "系统更新"
+log "确保系统已更新..."
 
 if exe pacman -Syu --noconfirm; then
-    success "System Updated."
+    success "系统已更新。"
 else
-    error "System update failed. Check your network."
+    error "系统更新失败，请检查网络。"
     exit 1
 fi
 
@@ -342,12 +342,12 @@ for module in "${MODULES[@]}"; do
 
     # Checkpoint Logic: Auto-skip if in state file
     if grep -q "^${module}$" "$STATE_FILE"; then
-        echo -e "   ${H_GREEN}✔${NC} Module ${BOLD}${module}${NC} already completed."
-        echo -e "   ${DIM}   Skipping... (Delete .install_progress to force run)${NC}"
+        echo -e "   ${H_GREEN}✔${NC} 模块 ${BOLD}${module}${NC} 已完成。"
+        echo -e "   ${DIM}   跳过...（删除 .install_progress 可强制重跑）${NC}"
         continue
     fi
 
-    section "Module ${CURRENT_STEP}/${TOTAL_STEPS}" "$module"
+    section "模块 ${CURRENT_STEP}/${TOTAL_STEPS}" "$module"
 
     set +e
     bash "$SCRIPTS_DIR/modules.sh" "$module"
@@ -357,17 +357,17 @@ for module in "${MODULES[@]}"; do
     if [ $exit_code -eq 0 ]; then
         # Only record success
         echo "$module" >> "$STATE_FILE"
-        success "Module $module completed."
+        success "模块 $module 完成。"
     elif [ $exit_code -eq $EXIT_CODE_INTERRUPTED ]; then
         echo ""
-        warn "Script interrupted by user (Ctrl+C)."
-        log "Exiting without rollback. You can resume later."
+        warn "脚本被用户中断 (Ctrl+C)。"
+        log "未回滚直接退出，可稍后继续。"
         exit $EXIT_CODE_INTERRUPTED
     else
         # Failure logic: do NOT write to STATE_FILE
-        write_log "FATAL" "Module $module failed with exit code $exit_code"
-        error "Module execution failed: $module"
-        warn "You can retry with: sudo bash scripts/modules.sh $module"
+        write_log "FATAL" "模块 $module 失败，退出码 $exit_code"
+        error "模块执行失败: $module"
+        warn "可使用以下命令重试：sudo bash scripts/modules.sh $module"
         exit 1
     fi
 done
@@ -375,7 +375,7 @@ done
 # ------------------------------------------------------------------------------
 # Final Cleanup
 # ------------------------------------------------------------------------------
-section "Completion" "System Cleanup"
+section "完成" "系统清理"
 
 # --- 1. Snapshot Cleanup Logic ---
 
@@ -392,7 +392,7 @@ get_protected_snapshot_ids() {
         
         if [ -n "$found_id" ]; then
             ids+=("$found_id")
-            log "Found protected snapshot: '$marker' (ID: $found_id)"
+            log "发现受保护快照：'$marker'（ID: $found_id）"
         fi
     done
     
@@ -451,13 +451,13 @@ clean_intermediate_snapshots() {
         return
     fi
 
-    log "Scanning junk snapshots in: $config_name..."
+    log "扫描多余快照：$config_name..."
 
     local start_id
     start_id=$(snapper -c "$config_name" list --columns number,description | grep -F "$start_marker" | awk '{print $1}' | tail -n 1)
 
     if [ -z "$start_id" ]; then
-        warn "Marker '$start_marker' not found in '$config_name'. Skipping cleanup."
+        warn "在 '$config_name' 中未找到标记 '$start_marker'，跳过清理。"
         return
     fi
 
@@ -468,16 +468,16 @@ clean_intermediate_snapshots() {
     snapshots_to_delete=($(collect_snapshots_to_delete "$config_name" "$start_id" "${protected_ids[@]}"))
 
     if [ ${#snapshots_to_delete[@]} -gt 0 ]; then
-        log "Deleting ${#snapshots_to_delete[@]} junk snapshots in '$config_name'..."
+        log "删除 '$config_name' 中 ${#snapshots_to_delete[@]} 个多余快照..."
         if exe snapper -c "$config_name" delete "${snapshots_to_delete[@]}"; then
-            success "Cleaned $config_name."
+            success "$config_name 清理完成。"
         fi
     else
-        log "No junk snapshots found in '$config_name'."
+        log "'$config_name' 中未发现多余快照。"
     fi
 }
 # --- 2. Execute Cleanup ---
-log "Cleaning Pacman/Yay cache..."
+log "清理 Pacman/Yay 缓存..."
 exe pacman -Sc --noconfirm
 
 clean_intermediate_snapshots "root"
@@ -489,7 +489,7 @@ DETECTED_USER=$(awk -F: "\$3 == 1000 {print \$1}" /etc/passwd)
 if [ -z "$DETECTED_USER" ]; then
     read -p "Target user: " TARGET_USER || TARGET_USER=""
     if [ -z "$TARGET_USER" ]; then
-        error "User required for cleanup"
+        error "清理需要用户"
         exit 1
     fi
 else
@@ -498,43 +498,43 @@ fi
 HOME_DIR="/home/$TARGET_USER"
 # --- 3. Remove Installer Files ---
 if [ -d "/root/shorin-arch-setup" ]; then
-    log "Removing installer from /root..."
+    log "从 /root 移除安装器..."
     cd /
     rm -rfv /root/shorin-arch-setup
 fi
 
 if [ -d "$HOME_DIR/shorin-arch-setup" ]; then
-    log "Removing installer from $HOME_DIR/shorin-arch-setup"
+    log "从 $HOME_DIR/shorin-arch-setup 移除安装器"
     rm -rfv "$HOME_DIR/shorin-arch-setup"
 else
-    log "Repo cleanup skipped."
-    log "please remove the folder yourself."
+    log "仓库清理已跳过。"
+    log "请自行删除该目录。"
 fi
 
 #--- 清理无用的下载残留
 for dir in /var/cache/pacman/pkg/download-*/; do
     # 检查目录是否存在
     if [ -d "$dir" ]; then
-        echo "Found residual directory: $dir, cleaning up..."
+        echo "发现残留目录：$dir，正在清理..."
         rm -rf "$dir"
     fi
 done
 
 # --- 4. Final GRUB Update ---
-log "Regenerating final GRUB configuration..."
+log "重新生成最终 GRUB 配置..."
 exe env LANG=en_US.UTF-8 grub-mkconfig -o /boot/grub/grub.cfg
 
 # --- Completion ---
 clear
 show_banner
 echo -e "${H_GREEN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${H_GREEN}║             INSTALLATION  COMPLETE                   ║${NC}"
+echo -e "${H_GREEN}║             安装完成                                  ║${NC}"
 echo -e "${H_GREEN}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 if [ -f "$STATE_FILE" ]; then rm "$STATE_FILE"; fi
 
-log "Archiving log..."
+log "归档日志..."
 if [ -f "/tmp/shorin_install_user" ]; then
     FINAL_USER=$(cat /tmp/shorin_install_user)
 else
@@ -546,21 +546,21 @@ if [ -n "$FINAL_USER" ]; then
     mkdir -p "$FINAL_DOCS"
     cp "$TEMP_LOG_FILE" "$FINAL_DOCS/log-shorin-arch-setup.txt"
     chown -R "$FINAL_USER:$FINAL_USER" "$FINAL_DOCS"
-    echo -e "   ${H_BLUE}●${NC} Log Saved     : ${BOLD}$FINAL_DOCS/log-shorin-arch-setup.txt${NC}"
+    echo -e "   ${H_BLUE}●${NC} 日志已保存     : ${BOLD}$FINAL_DOCS/log-shorin-arch-setup.txt${NC}"
 fi
 
 # --- Reboot Countdown ---
 echo ""
-echo -e "${H_YELLOW}>>> System requires a REBOOT.${NC}"
+echo -e "${H_YELLOW}>>> 系统需要重启。${NC}"
 
 while read -r -t 0.01 -n 10000 discard 2>/dev/null; do :; done
 
 for i in $(seq $REBOOT_COUNTDOWN_SECONDS -1 1); do
-    echo -ne "\r   ${DIM}Auto-rebooting in ${i}s... (Press 'n' to cancel)${NC}"
+    echo -ne "\r   ${DIM}${i}s 后自动重启...（按 'n' 取消）${NC}"
     
     if read -t 1 -n 1 input; then
         if [[ "$input" == "n" || "$input" == "N" ]]; then
-            echo -e "\n\n   ${H_BLUE}>>> Reboot cancelled.${NC}"
+            echo -e "\n\n   ${H_BLUE}>>> 已取消重启。${NC}"
             exit 0
         else
             break

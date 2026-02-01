@@ -23,20 +23,20 @@ case "$MODULE" in
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     check_root
     
-    section "Phase 0" "System Snapshot Initialization"
+    section "阶段 0" "系统快照初始化"
     
     # ------------------------------------------------------------------------------
     # 1. Configure Root (/)
     # ------------------------------------------------------------------------------
-    log "Checking Root filesystem..."
+    log "检查 Root 文件系统..."
     ROOT_FSTYPE=$(findmnt -n -o FSTYPE /)
     
     if [ "$ROOT_FSTYPE" == "btrfs" ]; then
-        log "Root is Btrfs. Installing Snapper..."
+        log "Root 为 Btrfs，安装 Snapper..."
         # Minimal install for snapshot capability
         exe pacman -Syu --noconfirm --needed snapper less
         
-        log "Configuring Snapper for Root..."
+        log "配置 Root 的 Snapper..."
         if ! snapper list-configs | grep -q "^root "; then
             # Cleanup existing dir to allow subvolume creation
             if [ -d "/.snapshots" ]; then
@@ -45,7 +45,7 @@ case "$MODULE" in
             fi
             
             if exe snapper -c root create-config /; then
-                success "Config 'root' created."
+                success "已创建配置 'root'。"
                 
                 # Apply Retention Policy
                 exe snapper -c root set-config \
@@ -65,20 +65,20 @@ case "$MODULE" in
                 exe systemctl enable snapper-timeline.timer
             fi
         else
-            log "Config 'root' already exists."
+            log "配置 'root' 已存在。"
         fi
     else
-        warn "Root is not Btrfs. Skipping Root snapshot."
+        warn "Root 不是 Btrfs，跳过 Root 快照。"
     fi
     
     # ------------------------------------------------------------------------------
     # 2. Configure Home (/home)
     # ------------------------------------------------------------------------------
-    log "Checking Home filesystem..."
+    log "检查 Home 文件系统..."
     
     # Check if /home is a mountpoint and is btrfs
     if findmnt -n -o FSTYPE /home | grep -q "btrfs"; then
-        log "Home is Btrfs. Configuring Snapper for Home..."
+        log "Home 为 Btrfs，配置 Home 的 Snapper..."
         
         if ! snapper list-configs | grep -q "^home "; then
             # Cleanup .snapshots in home if exists
@@ -88,7 +88,7 @@ case "$MODULE" in
             fi
             
             if exe snapper -c home create-config /home; then
-                success "Config 'home' created."
+                success "已创建配置 'home'。"
                 
                 # Apply same policy to home
                 exe snapper -c home set-config \
@@ -105,28 +105,28 @@ case "$MODULE" in
                     TIMELINE_LIMIT_YEARLY="0"
             fi
         else
-            log "Config 'home' already exists."
+            log "配置 'home' 已存在。"
         fi
     else
-        log "/home is not a separate Btrfs volume. Skipping."
+        log "/home 不是单独的 Btrfs 卷，跳过。"
     fi
     
     # ------------------------------------------------------------------------------
     # 3. Create Initial Safety Snapshots
     # ------------------------------------------------------------------------------
-    section "Safety Net" "Creating Initial Snapshots"
+    section "安全网" "创建初始快照"
     
     # Snapshot Root
     if snapper list-configs | grep -q "root "; then
         if snapper -c root list --columns description | grep -q "Before Shorin Setup"; then
-            log "Snapshot already created."
+            log "快照已创建。"
         else
-            log "Creating Root snapshot..."
+            log "创建 Root 快照..."
             if exe snapper -c root create --description "Before Shorin Setup"; then
-                success "Root snapshot created."
+                success "Root 快照已创建。"
             else
-                error "Failed to create Root snapshot."
-                warn "Cannot proceed without a safety snapshot. Aborting."
+                error "创建 Root 快照失败。"
+                warn "没有安全快照无法继续，已中止。"
                 exit 1
             fi
         fi
@@ -135,20 +135,20 @@ case "$MODULE" in
     # Snapshot Home
     if snapper list-configs | grep -q "home "; then
         if snapper -c home list --columns description | grep -q "Before Shorin Setup"; then
-            log "Snapshot already created."
+            log "快照已创建。"
         else
-            log "Creating Home snapshot..."
+            log "创建 Home 快照..."
             if exe snapper -c home create --description "Before Shorin Setup"; then
-                success "Home snapshot created."
+                success "Home 快照已创建。"
             else
-                error "Failed to create Home snapshot."
+                error "创建 Home 快照失败。"
                 # This is less critical than root, but should still be a failure.
                 exit 1
             fi
         fi
     fi
     
-    log "Module 00 completed. Safe to proceed."
+    log "模块 00 完成，可以继续。"
     ;;
 
   "01-base.sh")
@@ -160,29 +160,29 @@ case "$MODULE" in
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     check_root
     
-    log "Starting Phase 1: Base System Configuration..."
+    log "开始阶段 1：基础系统配置..."
     
     # ------------------------------------------------------------------------------
     # 1. Set Global Default Editor
     # ------------------------------------------------------------------------------
-    section "Step 1/6" "Global Default Editor"
+    section "步骤 1/6" "全局默认编辑器"
     
     TARGET_EDITOR="vim"
     
     if command -v nvim &> /dev/null; then
         TARGET_EDITOR="nvim"
-        log "Neovim detected."
+        log "检测到 Neovim。"
     elif command -v nano &> /dev/null; then
         TARGET_EDITOR="nano"
-        log "Nano detected."
+        log "检测到 Nano。"
     else
-        log "Neovim or Nano not found. Installing Vim..."
+        log "未发现 Neovim 或 Nano，安装 Vim..."
         if ! command -v vim &> /dev/null; then
             exe pacman -Syu --noconfirm gvim
         fi
     fi
     
-    log "Setting EDITOR=$TARGET_EDITOR in /etc/environment..."
+    log "在 /etc/environment 设置 EDITOR=$TARGET_EDITOR..."
     
     if grep -q "^EDITOR=" /etc/environment; then
         exe sed -i "s/^EDITOR=.*/EDITOR=${TARGET_EDITOR}/" /etc/environment
@@ -191,61 +191,61 @@ case "$MODULE" in
         # For simplicity in logging, we just run it and log success
         echo "EDITOR=${TARGET_EDITOR}" >> /etc/environment
     fi
-    success "Global EDITOR set to: ${TARGET_EDITOR}"
+    success "全局 EDITOR 已设置为：${TARGET_EDITOR}"
     
     # ------------------------------------------------------------------------------
     # 2. Enable 32-bit (multilib) Repository
     # ------------------------------------------------------------------------------
-    section "Step 2/6" "Multilib Repository"
+    section "步骤 2/6" "Multilib 仓库"
     
     if grep -q "^\[multilib\]" /etc/pacman.conf; then
-        success "[multilib] is already enabled."
+        success "[multilib] 已启用。"
     else
-        log "Uncommenting [multilib]..."
+        log "取消注释 [multilib]..."
         # Uncomment [multilib] and the following Include line
         exe sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
         
-        log "Refreshing database..."
+        log "刷新数据库..."
         exe pacman -Syu
-        success "[multilib] enabled."
+        success "[multilib] 启用完成。"
     fi
     
     # ------------------------------------------------------------------------------
     # 3. Install Base Fonts
     # ------------------------------------------------------------------------------
-    section "Step 3/6" "Base Fonts"
+    section "步骤 3/6" "基础字体"
     
-    log "Installing adobe-source-han-serif-cn-fonts adobe-source-han-sans-cn-fonts noto-fonts-cjk, noto-fonts, emoji..."
+    log "安装 adobe-source-han-serif-cn-fonts adobe-source-han-sans-cn-fonts noto-fonts-cjk, noto-fonts, emoji..."
     exe pacman -S --noconfirm --needed adobe-source-han-serif-cn-fonts adobe-source-han-sans-cn-fonts noto-fonts-cjk noto-fonts noto-fonts-emoji ttf-jetbrains-mono-nerd
-    log "Base fonts installed."
+    log "基础字体已安装。"
     
-    log "Installing terminus-font..."
+    log "安装 terminus-font..."
     # 安装 terminus-font 包
     exe pacman -S --noconfirm --needed terminus-font
     
-    log "Setting font for current session..."
+    log "为当前会话设置字体..."
     exe setfont ter-v20n
     
-    log "Configuring permanent vconsole font..."
+    log "配置永久 vconsole 字体..."
     if [ -f /etc/vconsole.conf ] && grep -q "^FONT=" /etc/vconsole.conf; then
         exe sed -i 's/^FONT=.*/FONT=ter-v20n/' /etc/vconsole.conf
     else
         echo "FONT=ter-v20n" >> /etc/vconsole.conf
     fi
     
-    log "Restarting systemd-vconsole-setup..."
+    log "重启 systemd-vconsole-setup..."
     exe systemctl restart systemd-vconsole-setup
     
-    success "TTY font configured (ter-v20n)."
+    success "TTY 字体已配置（ter-v20n）。"
     # ------------------------------------------------------------------------------
     # 4. Configure archlinuxcn Repository
     # ------------------------------------------------------------------------------
-    section "Step 4/6" "ArchLinuxCN Repository"
+    section "步骤 4/6" "ArchLinuxCN 仓库"
     
     if grep -q "\[archlinuxcn\]" /etc/pacman.conf; then
-        success "archlinuxcn repository already exists."
+        success "archlinuxcn 仓库已存在。"
     else
-        log "Adding archlinuxcn mirrors to pacman.conf..."
+        log "将 archlinuxcn 镜像添加到 pacman.conf..."
         cat <<-'EOT' >> /etc/pacman.conf
 	
 	[archlinuxcn]
@@ -254,24 +254,24 @@ case "$MODULE" in
 	Server = https://mirrors.hit.edu.cn/archlinuxcn/$arch
 	Server = https://repo.huaweicloud.com/archlinuxcn/$arch
 	EOT
-        success "Mirrors added."
+        success "镜像已添加。"
     fi
     
-    log "Installing archlinuxcn-keyring..."
+    log "安装 archlinuxcn-keyring..."
     # Keyring installation often needs -Sy specifically, but -Syu is safe too
     exe pacman -Syu --noconfirm archlinuxcn-keyring
-    success "ArchLinuxCN configured."
+    success "ArchLinuxCN 已配置。"
     
     # ------------------------------------------------------------------------------
     # 5. Install AUR Helpers
     # ------------------------------------------------------------------------------
-    section "Step 5/6" "AUR Helpers"
+    section "步骤 5/6" "AUR 助手"
     
-    log "Installing yay and paru..."
+    log "安装 yay 和 paru..."
     exe pacman -S --noconfirm --needed base-devel yay paru
-    success "AUR helpers installed."
+    success "AUR 助手已安装。"
     
-    log "Module 01 completed."
+    log "模块 01 完成。"
     ;;
 
   "02-musthave.sh")
@@ -286,22 +286,22 @@ case "$MODULE" in
     CN_MIRROR=${CN_MIRROR:-0}
     DEBUG=${DEBUG:-0}
     
-    log ">>> Starting Phase 2: Essential (Must-have) Software & Drivers"
+    log ">>> 开始阶段 2：必装软件与驱动"
     # ------------------------------------------------------------------------------
     # 1. Btrfs Extras & GRUB (Config was done in 00-btrfs-init)
     # ------------------------------------------------------------------------------
-    section "Step 1/8" "Btrfs Extras & GRUB"
+    section "步骤 1/8" "Btrfs 扩展与 GRUB"
     
     ROOT_FSTYPE=$(findmnt -n -o FSTYPE /)
     
     if [ "$ROOT_FSTYPE" == "btrfs" ]; then
-        log "Btrfs filesystem detected."
+        log "检测到 Btrfs 文件系统。"
         exe pacman -S --noconfirm --needed snapper btrfs-assistant
-        success "Snapper tools installed."
+        success "Snapper 工具已安装。"
     
         # GRUB Integration
     if [ -f "/etc/default/grub" ] && command -v grub-mkconfig >/dev/null 2>&1; then
-            log "Checking GRUB..."
+            log "检查 GRUB..."
             
              FOUND_EFI_GRUB=""
             
@@ -320,7 +320,7 @@ case "$MODULE" in
                     # 检查这个挂载点下是否有 grub 目录
                     if [ -d "$mountpoint/grub" ]; then
                         FOUND_EFI_GRUB="$mountpoint/grub"
-                        log "Found GRUB directory in ESP mountpoint: $mountpoint"
+                        log "在 ESP 挂载点找到 GRUB 目录：$mountpoint"
                         break 
                     fi
                 done <<< "$VFAT_MOUNTS"
@@ -331,15 +331,15 @@ case "$MODULE" in
                 
                 # -e 判断存在, -L 判断是软链接 
                 if [ -e "/boot/grub" ] || [ -L "/boot/grub" ]; then
-                    warn "Skip" "/boot/grub already exists. No symlink created."
+                    warn "跳过" "/boot/grub 已存在，未创建软链接。"
                 else
                     # 5. 仅当完全不存在时，创建软链接
-                    warn "/boot/grub is missing. Linking to $FOUND_EFI_GRUB..."
+                    warn "/boot/grub 缺失，链接到 $FOUND_EFI_GRUB..."
                     exe ln -sf "$FOUND_EFI_GRUB" /boot/grub
-                    success "Symlink created: /boot/grub -> $FOUND_EFI_GRUB"
+                    success "已创建软链接：/boot/grub -> $FOUND_EFI_GRUB"
                 fi
             else
-                log "No 'grub' directory found in any active vfat mounts. Skipping symlink check."
+                log "在所有已挂载的 vfat 中未找到 'grub' 目录，跳过软链接检查。"
             fi
             # --- 核心修改结束 ---
     
@@ -347,35 +347,35 @@ case "$MODULE" in
             systemctl_enable_now grub-btrfsd
     
             if ! grep -q "grub-btrfs-overlayfs" /etc/mkinitcpio.conf; then
-                log "Adding overlayfs hook to mkinitcpio..."
+                log "向 mkinitcpio 添加 overlayfs hook..."
                 sed -i 's/^HOOKS=(\(.*\))/HOOKS=(\1 grub-btrfs-overlayfs)/' /etc/mkinitcpio.conf
                 exe mkinitcpio -P
             fi
     
-            log "GRUB config regeneration deferred to final step."
+            log "GRUB 配置重新生成推迟到最后一步。"
         fi
     else
-        log "Root is not Btrfs. Skipping Snapper setup."
+        log "Root 不是 Btrfs，跳过 Snapper 配置。"
     fi
     
     # ------------------------------------------------------------------------------
     # 2. Audio & Video
     # ------------------------------------------------------------------------------
-    section "Step 2/8" "Audio & Video"
+    section "步骤 2/8" "音频与视频"
     
-    log "Installing firmware..."
+    log "安装固件..."
     exe pacman -S --noconfirm --needed sof-firmware alsa-ucm-conf alsa-firmware
     
-    log "Installing Pipewire stack..."
+    log "安装 Pipewire 套件..."
     exe pacman -S --noconfirm --needed pipewire lib32-pipewire wireplumber pipewire-pulse pipewire-alsa pipewire-jack pavucontrol
     
     exe systemctl --global enable pipewire pipewire-pulse wireplumber
-    success "Audio setup complete."
+    success "音频配置完成。"
     
     # ------------------------------------------------------------------------------
     # 3. Locale
     # ------------------------------------------------------------------------------
-    section "Step 3/8" "Locale Configuration"
+    section "步骤 3/8" "Locale 配置"
     
     LOCALE="${LOCALE:-en_US.UTF-8}"
     EXTRA_LOCALES="${EXTRA_LOCALES:-zh_CN.UTF-8}"
@@ -384,16 +384,16 @@ case "$MODULE" in
     for loc in $LOCALE $EXTRA_LOCALES; do
         loc_key=$(echo "$loc" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/')
         if locale -a | tr '[:upper:]' '[:lower:]' | grep -q "^${loc_key}$"; then
-            success "Locale active: $loc"
+            success "Locale 已启用：$loc"
         else
-            warn "Locale missing: $loc"
+            warn "Locale 缺失：$loc"
             MISSING_LOCALE=true
         fi
     done
     
     if [ "$MISSING_LOCALE" = true ]; then
         if [ "${FORCE_LOCALE_GEN:-0}" = "1" ]; then
-            log "FORCE_LOCALE_GEN=1 detected. Enabling and generating locales..."
+            log "检测到 FORCE_LOCALE_GEN=1，启用并生成 locale..."
             for loc in $LOCALE $EXTRA_LOCALES; do
                 if ! grep -q -E "^${loc} UTF-8" /etc/locale.gen; then
                     sed -i "s/^#\\s*${loc} UTF-8/${loc} UTF-8/" /etc/locale.gen
@@ -403,22 +403,22 @@ case "$MODULE" in
                 fi
             done
             if exe locale-gen; then
-                success "Locales generated successfully."
+                success "Locale 生成成功。"
             else
-                error "Locale generation failed."
+                error "Locale 生成失败。"
             fi
         else
-            log "Locale generation is handled in 00-arch-base-install.sh (ISO mode)."
-            log "If you are on an existing system, run: locale-gen or set FORCE_LOCALE_GEN=1"
+            log "Locale 生成由 00-arch-base-install.sh 处理（ISO 模式）。"
+            log "如果是已安装系统，请运行：locale-gen 或设置 FORCE_LOCALE_GEN=1"
         fi
     else
-        success "All required locales are active."
+        success "所有需要的 locale 已启用。"
     fi
     
     # ------------------------------------------------------------------------------
     # 4. Input Method
     # ------------------------------------------------------------------------------
-    section "Step 4/8" "Input Method (Fcitx5)"
+    section "步骤 4/8" "输入法（Fcitx5）"
     
     # chinese-addons备用
     exe pacman -S --noconfirm --needed fcitx5-im fcitx5-chinese-addons fcitx5-rime
@@ -442,28 +442,28 @@ case "$MODULE" in
     
             if ! is_package_installed "rime-ice-git"; then
                 if ! as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None rime-ice-git; then
-                    warn "Failed to install AUR package: rime-ice-git"
+                    warn "AUR 包安装失败：rime-ice-git"
                 fi
             fi
     
             temp_sudo_end "$SUDO_TEMP_FILE"
             trap - EXIT
         else
-            warn "No target user detected yet. Skipping AUR package: rime-ice-git"
+            warn "尚未检测到目标用户，跳过 AUR 包：rime-ice-git"
         fi
     else
-        warn "yay not found. Skipping AUR package: rime-ice-git"
+        warn "未找到 yay，跳过 AUR 包：rime-ice-git"
     fi
     
-    success "Fcitx5 installed."
+    success "Fcitx5 已安装。"
     
     # ------------------------------------------------------------------------------
     # 5. Bluetooth (Smart Detection)
     # ------------------------------------------------------------------------------
-    section "Step 5/8" "Bluetooth"
+    section "步骤 5/8" "蓝牙"
     
     # Ensure detection tools are present
-    log "Detecting Bluetooth hardware..."
+    log "检测蓝牙硬件..."
     exe pacman -S --noconfirm --needed usbutils pciutils
     
     BT_FOUND=false
@@ -476,36 +476,36 @@ case "$MODULE" in
     if rfkill list bluetooth >/dev/null 2>&1; then BT_FOUND=true; fi
     
     if [ "$BT_FOUND" = true ]; then
-        info_kv "Hardware" "Detected"
+        info_kv "硬件" "已检测到"
     
-        log "Installing Bluez "
+        log "安装 Bluez "
         exe pacman -S --noconfirm --needed bluez
     
         systemctl_enable_now bluetooth
-        success "Bluetooth service enabled."
+        success "蓝牙服务已启用。"
     else
-        info_kv "Hardware" "Not Found"
-        warn "No Bluetooth device detected. Skipping installation."
+        info_kv "硬件" "未检测到"
+        warn "未检测到蓝牙设备，跳过安装。"
     fi
     
     # ------------------------------------------------------------------------------
     # 6. Power
     # ------------------------------------------------------------------------------
-    section "Step 6/8" "Power Management"
+    section "步骤 6/8" "电源管理"
     
     exe pacman -S --noconfirm --needed power-profiles-daemon
     systemctl_enable_now power-profiles-daemon
-    success "Power profiles daemon enabled."
+    success "Power profiles daemon 已启用。"
     
     # ------------------------------------------------------------------------------
     # 7. Fastfetch
     # ------------------------------------------------------------------------------
-    section "Step 7/8" "Fastfetch"
+    section "步骤 7/8" "Fastfetch"
     
     exe pacman -S --noconfirm --needed fastfetch
-    success "Fastfetch installed."
+    success "Fastfetch 已安装。"
     
-    log "Module 02 completed."
+    log "模块 02 完成。"
     
     # ------------------------------------------------------------------------------
     # 9. flatpak
@@ -518,13 +518,13 @@ case "$MODULE" in
     IS_CN_ENV=false
     if [[ "$CURRENT_TZ" == *"Shanghai"* ]] || [ "$CN_MIRROR" == "1" ] || [ "$DEBUG" == "1" ]; then
       IS_CN_ENV=true
-      info_kv "Region" "China Optimization Active"
+      info_kv "地区" "中国优化已启用"
     fi
     
     if [ "$IS_CN_ENV" = true ]; then
       select_flathub_mirror
     else
-      log "Using Global Sources."
+      log "使用全球源。"
     fi
     ;;
 
@@ -540,57 +540,57 @@ case "$MODULE" in
     
     # --- GRUB Installation Check ---
     if ! command -v grub-mkconfig &>/dev/null || [ ! -f "/etc/default/grub" ]; then
-        warn "GRUB is not detected. Skipping dual-boot configuration."
+        warn "未检测到 GRUB，跳过双系统配置。"
         exit 0
     fi
     
     # --- Main Script ---
     
-    section "Phase 2A" "Dual-Boot Configuration (Windows)"
+    section "阶段 2A" "双系统配置（Windows）"
     
     # ------------------------------------------------------------------------------
     # 1. Detect Windows
     # ------------------------------------------------------------------------------
-    section "Step 1/2" "System Analysis"
+    section "步骤 1/2" "系统分析"
     
-    log "Installing dual-boot detection tools (os-prober, exfat-utils)..."
+    log "安装双系统检测工具（os-prober、exfat-utils）..."
     exe pacman -S --noconfirm --needed os-prober exfat-utils
     
-    log "Scanning for Windows installation..."
+    log "扫描 Windows 安装..."
     WINDOWS_DETECTED=$(os-prober | grep -qi "windows" && echo "true" || echo "false")
     
     if [ "$WINDOWS_DETECTED" != "true" ]; then
-        log "No Windows installation detected by os-prober."
-        log "Skipping dual-boot specific configurations."
-        log "Module 02a completed (Skipped)."
+        log "os-prober 未检测到 Windows 安装。"
+        log "跳过双系统相关配置。"
+        log "模块 02a 完成（已跳过）。"
         exit 0
     fi
     
-    success "Windows installation detected."
+    success "检测到 Windows 安装。"
     
     # --- Check if already configured ---
     OS_PROBER_CONFIGURED=$(grep -q -E '^\s*GRUB_DISABLE_OS_PROBER\s*=\s*(false|"false")' /etc/default/grub && echo "true" || echo "false")
     
     if [ "$OS_PROBER_CONFIGURED" == "true" ]; then
-        log "Dual-boot settings seem to be already configured."
+        log "双系统设置似乎已配置。"
         echo ""
-        echo -e "   ${H_YELLOW}>>> It looks like your dual-boot is already set up.${NC}"
+        echo -e "   ${H_YELLOW}>>> 看起来你的双系统已经配置完成。${NC}"
         echo ""
     fi
     
     # ------------------------------------------------------------------------------
     # 2. Configure GRUB for Dual-Boot
     # ------------------------------------------------------------------------------
-    section "Step 2/2" "Enabling OS Prober"
+    section "步骤 2/2" "启用 OS Prober"
     
-    log "Enabling OS prober to detect Windows..."
+    log "启用 OS Prober 以检测 Windows..."
     set_grub_value "GRUB_DISABLE_OS_PROBER" "false"
     
-    success "Dual-boot settings updated."
+    success "双系统设置已更新。"
     
-    log "GRUB config regeneration deferred to final step."
+    log "GRUB 配置重新生成推迟到最后一步。"
     
-    log "Module 02a completed."
+    log "模块 02a 完成。"
     ;;
 
   "03-user.sh")
@@ -606,16 +606,16 @@ case "$MODULE" in
     # ==============================================================================
     # Phase 0: 安装 zsh
     # ==============================================================================
-    section "Phase 3 (Prep)" "Install zsh"
+    section "阶段 3（准备）" "安装 zsh"
     
-    log "Installing zsh shell..."
+    log "安装 zsh shell..."
     exe pacman -S --noconfirm --needed zsh
-    success "zsh installed."
+    success "zsh 已安装。"
     
     # ==============================================================================
     # Phase 1: 用户检测与创建逻辑
     # ==============================================================================
-    section "Phase 3" "User Account Setup"
+    section "阶段 3" "用户账户设置"
     
     # 检测是否已存在普通用户 (UID 1000)
     EXISTING_USER=$(awk -F: '$3 == 1000 {print $1}' /etc/passwd)
@@ -623,33 +623,33 @@ case "$MODULE" in
     SKIP_CREATION=false
     
     if [ -n "$EXISTING_USER" ]; then
-        info_kv "Detected User" "$EXISTING_USER" "(UID 1000)"
-        log "Using existing user configuration."
+        info_kv "检测到用户" "$EXISTING_USER" "(UID 1000)"
+        log "使用现有用户配置。"
         MY_USERNAME="$EXISTING_USER"
         SKIP_CREATION=true
     else
-        warn "No standard user found (UID 1000)."
+        warn "未找到标准用户（UID 1000）。"
         
         # 支持环境变量预设（零交互模式）
         if [ -n "${SHORIN_USERNAME:-}" ]; then
             MY_USERNAME="$SHORIN_USERNAME"
-            info_kv "Username" "$MY_USERNAME" "(From ENV)"
-            log "Using predefined username from SHORIN_USERNAME."
+            info_kv "用户名" "$MY_USERNAME" "(来自环境变量)"
+            log "使用 SHORIN_USERNAME 预设用户名。"
         else
             # 交互式输入用户名循环
             while true; do
                 echo ""
-                echo -ne "   ${ARROW} ${H_YELLOW}Please enter new username:${NC} "
+                echo -ne "   ${ARROW} ${H_YELLOW}请输入新用户名：${NC} "
                 read INPUT_USER
                 
                 INPUT_USER=$(echo "$INPUT_USER" | xargs)
                 
                 if [[ -z "$INPUT_USER" ]]; then
-                    warn "Username cannot be empty."
+                    warn "用户名不能为空。"
                     continue
                 fi
     
-                echo -ne "   ${INFO} Create user '${BOLD}${H_CYAN}${INPUT_USER}${NC}'? [Y/n] "
+                echo -ne "   ${INFO} 创建用户 '${BOLD}${H_CYAN}${INPUT_USER}${NC}'？ [Y/n] "
                 read CONFIRM
                 CONFIRM=${CONFIRM:-Y}
                 
@@ -657,7 +657,7 @@ case "$MODULE" in
                     MY_USERNAME="$INPUT_USER"
                     break
                 else
-                    log "Cancelled. Please re-enter."
+                    log "已取消，请重新输入。"
                 fi
             done
         fi
@@ -669,86 +669,86 @@ case "$MODULE" in
     # ==============================================================================
     # Phase 2: 账户权限与密码配置
     # ==============================================================================
-    section "Step 2/4" "Account & Privileges"
+    section "步骤 2/4" "账户与权限"
     
     if [ "$SKIP_CREATION" = true ]; then
-        log "Checking permissions for $MY_USERNAME..."
+        log "检查 $MY_USERNAME 的权限..."
         if groups "$MY_USERNAME" | grep -q "\bwheel\b"; then
-            success "User is already in 'wheel' group."
+            success "用户已在 'wheel' 组。"
         else
-            log "Adding user to 'wheel' group..."
+            log "将用户加入 'wheel' 组..."
             exe usermod -aG wheel "$MY_USERNAME"
         fi
     else
-        log "Creating new user '${MY_USERNAME}'..."
+        log "创建新用户 '${MY_USERNAME}'..."
         exe useradd -m -g wheel -s /bin/zsh "$MY_USERNAME"
         
         # 支持环境变量预设密码（零交互模式）
         if [ -n "${SHORIN_PASSWORD:-}" ]; then
-            log "Setting password from SHORIN_PASSWORD..."
+            log "使用 SHORIN_PASSWORD 设置密码..."
             printf '%s:%s\n' "$MY_USERNAME" "$SHORIN_PASSWORD" | chpasswd
             PASSWORD_STATUS=$?
             
             if [ $PASSWORD_STATUS -eq 0 ]; then
-                success "Password set successfully (non-interactive)."
+                success "密码设置成功（非交互）。"
             else
-                error "Failed to set password via chpasswd."
+                error "通过 chpasswd 设置密码失败。"
                 exit 1
             fi
         else
-            log "Setting password for ${MY_USERNAME} (interactive)..."
+            log "为 ${MY_USERNAME} 设置密码（交互）..."
             echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
             passwd "$MY_USERNAME"
             PASSWORD_STATUS=$?
             echo -e "   ${H_GRAY}--------------------------------------------------${NC}"
             
             if [ $PASSWORD_STATUS -eq 0 ]; then 
-                success "Password set successfully."
+                success "密码设置成功。"
             else 
-                error "Failed to set password. Script aborted."
+                error "密码设置失败，脚本已中止。"
                 exit 1
             fi
         fi
     fi
     
     # 1. 配置 Sudoers
-    log "Configuring sudoers access..."
+    log "配置 sudoers 权限..."
     if grep -q "^# %wheel ALL=(ALL:ALL) ALL" /etc/sudoers; then
         # 使用 sed 去掉注释
         exe sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
-        success "Uncommented %wheel in /etc/sudoers."
+        success "已取消 /etc/sudoers 中的 %wheel 注释。"
     elif grep -q "^%wheel ALL=(ALL:ALL) ALL" /etc/sudoers; then
-        success "Sudo access already enabled."
+        success "sudo 权限已启用。"
     else
         # 如果找不到标准行，则追加
-        log "Appending %wheel rule to /etc/sudoers..."
+        log "向 /etc/sudoers 追加 %wheel 规则..."
         echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
-        success "Sudo access configured."
+        success "sudo 权限已配置。"
     fi
     
     # 2. 配置 Faillock (防止输错密码锁定) [新增部分]
-    log "Configuring password lockout policy (faillock)..."
+    log "配置密码锁定策略（faillock）..."
     FAILLOCK_CONF="/etc/security/faillock.conf"
     
     if [ -f "$FAILLOCK_CONF" ]; then
         # 使用 sed 匹配被注释的(# deny =) 或者未注释的(deny =) 行，统一改为 deny = 0
         # 正则解释: ^#\? 匹配开头可选的井号; \s* 匹配可选空格
         exe sed -i 's/^#\?\s*deny\s*=.*/deny = 0/' "$FAILLOCK_CONF"
-        success "Account lockout disabled (deny=0)."
+        success "账户锁定已禁用（deny=0）。"
     else
         # 极少数情况该文件不存在，虽然在 Arch 中默认是有这个文件的
-        warn "File $FAILLOCK_CONF not found. Skipping lockout config."
+        warn "未找到 $FAILLOCK_CONF，跳过锁定配置。"
     fi
     
     # ==============================================================================
     # Phase 3: 生成 XDG 用户目录
     # ==============================================================================
-    section "Step 3/4" "User Directories"
+    section "步骤 3/4" "用户目录"
     
     # 安装工具
     exe pacman -Syu --noconfirm --needed xdg-user-dirs
     
-    log "Generating directories (Downloads, Documents, etc.)..."
+    log "生成用户目录（Downloads、Documents 等）..."
     
     # 获取用户真实的 Home 目录 (处理用户可能更改过 home 的情况)
     REAL_HOME=$(getent passwd "$MY_USERNAME" | cut -d: -f6)
@@ -756,32 +756,32 @@ case "$MODULE" in
     # 强制以该用户身份运行更新命令
     # 注意：使用 env 设置 HOME 和 LANG 确保目录名为英文 (arch 习惯)
     if exe runuser -u "$MY_USERNAME" -- env LANG=en_US.UTF-8 HOME="$REAL_HOME" xdg-user-dirs-update --force; then
-        success "Directories created in $REAL_HOME."
+        success "目录已在 $REAL_HOME 创建。"
     else
-        warn "Failed to generate standard directories."
+        warn "生成标准目录失败。"
     fi
     
     # ==============================================================================
     # Phase 4: 环境配置 (PATH 与 .local/bin)
     # ==============================================================================
-    section "Step 4/4" "Environment Setup"
+    section "步骤 4/4" "环境设置"
     
     # 1. 创建 ~/.local/bin
     # 关键点：使用 runuser 确保文件夹归属权是用户，而不是 root
     LOCAL_BIN_PATH="$REAL_HOME/.local/bin"
     
-    log "Creating user executable directory..."
-    info_kv "Target" "$LOCAL_BIN_PATH"
+    log "创建用户可执行目录..."
+    info_kv "目标" "$LOCAL_BIN_PATH"
     
     if exe runuser -u "$MY_USERNAME" -- mkdir -p "$LOCAL_BIN_PATH"; then
-        success "Created directory (Ownership: $MY_USERNAME)"
+        success "目录已创建（所有者：$MY_USERNAME）"
     else
-        error "Failed to create ~/.local/bin"
+        error "创建 ~/.local/bin 失败"
     fi
     
     # 2. 配置全局 PATH (/etc/profile.d/)
     PROFILE_SCRIPT="/etc/profile.d/user_local_bin.sh"
-    log "Configuring automatic PATH detection..."
+    log "配置自动 PATH 检测..."
     
     # 写入配置脚本
     cat <<-'EOF' > "$PROFILE_SCRIPT"
@@ -795,10 +795,10 @@ case "$MODULE" in
     exe chmod 644 "$PROFILE_SCRIPT"
     
     if [ -f "$PROFILE_SCRIPT" ]; then
-        success "PATH script installed to /etc/profile.d/"
-        info_kv "Effect" "Requires re-login"
+        success "PATH 脚本已安装到 /etc/profile.d/"
+        info_kv "效果" "需要重新登录"
     else
-        warn "Failed to create profile.d script."
+        warn "创建 profile.d 脚本失败。"
     fi
     
     # ==============================================================================
@@ -809,14 +809,14 @@ case "$MODULE" in
     #   - 04-niri-setup.sh    → niri-dotfiles/   (包含所有配置)
     #   - 04d-gnome.sh        → gnome-dotfiles/  (包含所有配置)
     # ==============================================================================
-    log "User config deployment delegated to Desktop Environment modules."
+    log "用户配置部署交由桌面环境模块处理。"
     
     # ==============================================================================
     # 完成
     # ==============================================================================
     hr
-    success "User setup module completed."
-    echo -e "   ${DIM}User '${MY_USERNAME}' is ready for Desktop Environment setup.${NC}"
+    success "用户设置模块完成。"
+    echo -e "   ${DIM}用户 '${MY_USERNAME}' 已准备好进行桌面环境配置。${NC}"
     echo ""
     ;;
 
@@ -829,16 +829,16 @@ case "$MODULE" in
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     check_root
     
-    section "Phase 2b" "GPU Driver Setup"
+    section "阶段 2b" "GPU 驱动设置"
     
     # ==============================================================================
     # 1. 变量声明与基础信息获取
     # ==============================================================================
-    log "Detecting GPU Hardware..."
+    log "检测 GPU 硬件..."
     
     # 核心变量：存放 lspci 信息
     GPU_INFO=$(lspci -mm | grep -E -i "VGA|3D|Display")
-    log "GPU Info Detected:\n$GPU_INFO"
+    log "检测到 GPU 信息：\n$GPU_INFO"
     
     # 状态变量初始化
     HAS_AMD=false
@@ -854,7 +854,7 @@ case "$MODULE" in
     # --- AMD 检测 --- -q 静默，-i忽略大小写
     if echo "$GPU_INFO" | grep -q -i "AMD\|ATI"; then
         HAS_AMD=true
-        info_kv "Vendor" "AMD Detected"
+        info_kv "厂商" "检测到 AMD"
         # 追加 AMD 基础包
         PKGS+=("mesa" "lib32-mesa" "xf86-video-amdgpu" "vulkan-radeon" "lib32-vulkan-radeon" "linux-firmware-amdgpu" "gst-plugin-va" "opencl-mesa" "lib32-opencl-mesa" "opencl-icd-loader" "lib32-opencl-icd-loader" )
     fi
@@ -862,7 +862,7 @@ case "$MODULE" in
     # --- Intel 检测 ---
     if echo "$GPU_INFO" | grep -q -i "Intel"; then
         HAS_INTEL=true
-        info_kv "Vendor" "Intel Detected"
+        info_kv "厂商" "检测到 Intel"
         # 追加 Intel 基础包 (保证能亮机，能跑基础桌面)
         PKGS+=("mesa" "vulkan-intel" "lib32-mesa" "lib32-vulkan-intel" "gst-plugin-va" "linux-firmware-intel" "opencl-mesa" "lib32-opencl-mesa" "opencl-icd-loader" "lib32-opencl-icd-loader" )
     fi
@@ -870,7 +870,7 @@ case "$MODULE" in
     # --- NVIDIA 检测 ---
     if echo "$GPU_INFO" | grep -q -i "NVIDIA"; then
         HAS_NVIDIA=true
-        info_kv "Vendor" "NVIDIA Detected"
+        info_kv "厂商" "检测到 NVIDIA"
         # 追加 NVIDIA 基础工具包
     fi
     
@@ -878,7 +878,7 @@ case "$MODULE" in
     GPU_COUNT=$(echo "$GPU_INFO" | grep -c .)
     
     if [ "$GPU_COUNT" -ge 2 ]; then
-        info_kv "GPU Layout" "Dual/Multi-GPU Detected (Count: $GPU_COUNT)"
+        info_kv "GPU 布局" "检测到双/多 GPU（数量：$GPU_COUNT）"
         # 安装 vulkan-mesa-layers 以支持 vk-device-select
         PKGS+=("vulkan-mesa-layers" "lib32-vulkan-mesa-layers")
     
@@ -899,10 +899,10 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     if [ "$HAS_INTEL" = true ]; then
         if echo "$GPU_INFO" | grep -q -E -i "Arc|Xe|UHD|Iris|Raptor|Alder|Tiger|Rocket|Ice|Comet|Coffee|Kaby|Skylake|Broadwell|Gemini|Jasper|Elkhart|HD Graphics 6|HD Graphics 5[0-9][0-9]\b"; then
-            log "   -> Intel: Modern architecture matched (iHD path)..."
+            log "   -> Intel：匹配到现代架构（iHD 路径）..."
             PKGS+=("intel-media-driver")
         else
-            warn "   -> Intel: Legacy or Unknown model. Skipping intel-media-driver."
+            warn "   -> Intel：旧款或未知型号，跳过 intel-media-driver。"
         fi
     fi
     
@@ -919,7 +919,7 @@ case "$MODULE" in
         #  nvidia-open 
         # ==========================================================================
         if echo "$NV_MODEL" | grep -q -E -i "RTX|GTX 16"; then
-            log "   -> NVIDIA: Modern GPU detected (Turing+). Using Open Kernel Modules."
+            log "   -> NVIDIA：检测到现代 GPU（Turing+），使用 Open Kernel Modules。"
             
             # 核心驱动包
             PKGS+=("nvidia-open-dkms" "nvidia-utils" "lib32-nvidia-utils" "opencl-nvidia" "lib32-opencl-nvidia" "libva-nvidia-driver" "vulkan-icd-loader" "lib32-vulkan-icd-loader" "opencl-icd-loader" "lib32-opencl-icd-loader")
@@ -929,7 +929,7 @@ case "$MODULE" in
         # nvidia-580xx-dkms
         # ==========================================================================
         elif echo "$NV_MODEL" | grep -q -E -i "GTX 10|GTX 950|GTX 960|GTX 970|GTX 980|GTX 745|GTX 750|GTX 750 Ti|GTX 840M|GTX 845M|GTX 850M|GTX 860M|GTX 950M|GTX 960M|GeForce 830M|GeForce 840M|GeForce 930M|GeForce 940M|GeForce GTX Titan X|Tegra X1|NVIDIA Titan X|NVIDIA Titan Xp|NVIDIA Titan V|NVIDIA Quadro GV100"; then
-            log "   -> NVIDIA: Pascal/Maxwell GPU detected. Using Proprietary DKMS."
+            log "   -> NVIDIA：检测到 Pascal/Maxwell GPU，使用 Proprietary DKMS。"
             PKGS+=("nvidia-580xx-dkms" "nvidia-580xx-utils" "opencl-nvidia-580xx" "lib32-opencl-nvidia-580xx" "lib32-nvidia-580xx-utils" "libva-nvidia-driver" "vulkan-icd-loader" "lib32-vulkan-icd-loader" "opencl-icd-loader" "lib32-opencl-icd-loader" )
             DRIVER_SELECTED=true
     
@@ -938,7 +938,7 @@ case "$MODULE" in
         # ==========================================================================
         elif echo "$NV_MODEL" | grep -q -E -i "GTX 6[0-9][0-9]|GTX 760|GTX 765|GTX 770|GTX 775|GTX 780|GTX 860M|GT 6[0-9][0-9]|GT 710M|GT 720|GT 730M|GT 735M|GT 740|GT 745M|GT 750M|GT 755M|GT 920M|Quadro 410|Quadro K500|Quadro K510|Quadro K600|Quadro K610|Quadro K1000|Quadro K1100|Quadro K2000|Quadro K2100|Quadro K3000|Quadro K3100|Quadro K4000|Quadro K4100|Quadro K5000|Quadro K5100|Quadro K6000|Tesla K10|Tesla K20|Tesla K40|Tesla K80|NVS 510|NVS 1000|Tegra K1|Titan|Titan Z"; then
     
-            log "   -> NVIDIA:  Kepler GPU detected. Using nvidia-470xx-dkms."
+            log "   -> NVIDIA：检测到 Kepler GPU，使用 nvidia-470xx-dkms。"
             PKGS+=("nvidia-470xx-dkms" "nvidia-470xx-utils" "opencl-nvidia-470xx" "vulkan-icd-loader" "lib32-nvidia-470xx-utils" "lib32-opencl-nvidia-470xx" "lib32-vulkan-icd-loader" "libva-nvidia-driver" "opencl-icd-loader" "lib32-opencl-icd-loader")
             DRIVER_SELECTED=true
     
@@ -946,15 +946,15 @@ case "$MODULE" in
         # others
         # ========================================================================== 
         else
-            warn "   -> NVIDIA: Legacy GPU detected ($NV_MODEL)."
-            warn "   -> Please manually install GPU driver."
+            warn "   -> NVIDIA：检测到旧款 GPU（$NV_MODEL）。"
+            warn "   -> 请手动安装 GPU 驱动。"
         fi
     
         # ==========================================================================
         # headers
         # ==========================================================================
         if [ "$DRIVER_SELECTED" = true ]; then
-            log "   -> NVIDIA: Scanning installed kernels for headers..."
+            log "   -> NVIDIA：扫描已安装内核的 headers..."
             
             # 1. 获取所有以 linux 开头的候选包
             CANDIDATES=$(pacman -Qq | grep "^linux" | grep -vE "headers|firmware|api|docs|tools|utils|qq")
@@ -963,7 +963,7 @@ case "$MODULE" in
                 # 2. 验证：只有在 /boot 下存在对应 vmlinuz 文件的才算是真内核
                 if [ -f "/boot/vmlinuz-${kernel}" ]; then
                     HEADER_PKG="${kernel}-headers"
-                    log "      + Kernel found: $kernel -> Adding $HEADER_PKG"
+                    log "      + 发现内核：$kernel -> 添加 $HEADER_PKG"
                     PKGS+=("$HEADER_PKG")
                 fi
             done
@@ -980,11 +980,11 @@ case "$MODULE" in
     
     #--------------sudo temp file--------------------#
     SUDO_TEMP_FILE="$(temp_sudo_begin "$TARGET_USER")"
-    log "Temp sudo file created..."
+    log "已创建临时 sudo 文件..."
     
     cleanup_sudo() {
         temp_sudo_end "$SUDO_TEMP_FILE"
-        log "Security: Temporary sudo privileges revoked."
+        log "安全：已撤销临时 sudo 权限。"
     }
     trap cleanup_sudo EXIT INT TERM
     
@@ -992,21 +992,21 @@ case "$MODULE" in
         # 数组去重
         UNIQUE_PKGS=($(printf "%s\n" "${PKGS[@]}" | sort -u))
         
-        section "Installation" "Installing Packages"
-        log "Target Packages: ${UNIQUE_PKGS[*]}"
+        section "安装" "安装软件包"
+        log "目标软件包：${UNIQUE_PKGS[*]}"
         
         # 执行安装
         exe runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "${UNIQUE_PKGS[@]}"
         
-        log "Enabling services (if supported)..."
+        log "启用服务（如支持）..."
         systemctl enable --now nvidia-powerd &>/dev/null || true
         systemctl enable switcheroo-control.service &>/dev/null || true
-        success "GPU Drivers processed successfully."
+        success "GPU 驱动处理完成。"
     else
-        warn "No GPU drivers matched or needed."
+        warn "未匹配或不需要 GPU 驱动。"
     fi
     
-    log "Module 02b completed."
+    log "模块 02b 完成。"
     ;;
 
   "03c-snapshot-before-desktop.sh")
@@ -1020,7 +1020,7 @@ case "$MODULE" in
     # 权限检查
     check_root
     
-    section "Phase 3c" "System Snapshot"
+    section "阶段 3c" "系统快照"
     
     # ==============================================================================
     
@@ -1029,7 +1029,7 @@ case "$MODULE" in
         
         # 0. 检查 snapper 是否安装
         if ! command -v snapper &>/dev/null; then
-            warn "Snapper tool not found. Skipping snapshot creation."
+            warn "未找到 Snapper 工具，跳过快照创建。"
             return
         fi
     
@@ -1038,25 +1038,25 @@ case "$MODULE" in
         if snapper -c root get-config &>/dev/null; then
             # 检查是否已存在同名快照 (避免重复创建)
             if snapper -c root list --columns description | grep -Fqx "$MARKER"; then
-                log "Snapshot '$MARKER' already exists on [root]."
+                log "快照 '$MARKER' 已存在于 [root]。"
             else
-                log "Creating safety checkpoint on [root]..."
+                log "在 [root] 创建安全检查点..."
                 # 使用 --type single 表示这是一个独立的存档点
                 snapper -c root create --description "$MARKER"
-                success "Root snapshot created."
+                success "Root 快照已创建。"
             fi
         else
-            warn "Snapper 'root' config not configured. Skipping root snapshot."
+            warn "Snapper 'root' 配置未建立，跳过 root 快照。"
         fi
     
         # 2. Home 分区快照 (如果存在 home 配置)
         if snapper -c home get-config &>/dev/null; then
             if snapper -c home list --columns description | grep -Fqx "$MARKER"; then
-                log "Snapshot '$MARKER' already exists on [home]."
+                log "快照 '$MARKER' 已存在于 [home]。"
             else
-                log "Creating safety checkpoint on [home]..."
+                log "在 [home] 创建安全检查点..."
                 snapper -c home create --description "$MARKER"
-                success "Home snapshot created."
+                success "Home 快照已创建。"
             fi
         fi
     }
@@ -1065,10 +1065,10 @@ case "$MODULE" in
     # 执行
     # ==============================================================================
     
-    log "Preparing to create restore point..."
+    log "准备创建还原点..."
     create_checkpoint
     
-    log "Module 03c completed."
+    log "模块 03c 完成。"
     ;;
 
   "04-niri-setup.sh")
@@ -1103,25 +1103,25 @@ case "$MODULE" in
       echo ""
       echo -e "\033[0;31m################################################################\033[0m"
       echo -e "\033[0;31m#                                                              #\033[0m"
-      echo -e "\033[0;31m#   CRITICAL INSTALLATION FAILURE DETECTED                     #\033[0m"
+      echo -e "\033[0;31m#   检测到关键安装失败                                           #\033[0m"
       echo -e "\033[0;31m#                                                              #\033[0m"
-      echo -e "\033[0;31m#   Reason: $failed_reason\033[0m"
+      echo -e "\033[0;31m#   原因：$failed_reason\033[0m"
       echo -e "\033[0;31m#                                                              #\033[0m"
-      echo -e "\033[0;31m#   OPTIONS:                                                   #\033[0m"
-      echo -e "\033[0;31m#   1. Restore snapshot (Undo changes & Exit)                  #\033[0m"
-      echo -e "\033[0;31m#   2. Retry / Re-run script                                   #\033[0m"
-      echo -e "\033[0;31m#   3. Abort (Exit immediately)                                #\033[0m"
+      echo -e "\033[0;31m#   选项：                                                     #\033[0m"
+      echo -e "\033[0;31m#   1. 恢复快照（撤销更改并退出）                               #\033[0m"
+      echo -e "\033[0;31m#   2. 重试 / 重新运行脚本                                     #\033[0m"
+      echo -e "\033[0;31m#   3. 中止（立即退出）                                        #\033[0m"
       echo -e "\033[0;31m#                                                              #\033[0m"
       echo -e "\033[0;31m################################################################\033[0m"
       echo ""
     
       while true; do
-        read -p "Select an option [1-3]: " -r choice
+        read -p "请选择 [1-3]：" -r choice
         case "$choice" in
         1)
           # Option 1: Restore Snapshot
           if [ -f "$UNDO_SCRIPT" ]; then
-            warn "Executing recovery script..."
+            warn "执行恢复脚本..."
             MARKER="Before Desktop Environments" \
             CLEAN_CACHE=1 \
             REMOVE_MODULE="04-niri-setup.sh" \
@@ -1129,26 +1129,26 @@ case "$MODULE" in
             bash "$UNDO_SCRIPT" rollback
             exit 1
           else
-            error "Recovery script missing! You are on your own."
+            error "恢复脚本缺失！请自行处理。"
             exit 1
           fi
           ;;
         2)
           # Option 2: Re-run Script
-          warn "Restarting installation script..."
+          warn "重新启动安装脚本..."
           echo "-----------------------------------------------------"
           sleep 1
           exec "$0" "$@"
           ;;
         3)
           # Option 3: Exit
-          warn "User chose to abort."
-          warn "Please fix the issue manually before re-running."
-          error "Installation aborted."
+          warn "用户选择中止。"
+          warn "请先手动修复问题后再重试。"
+          error "安装已中止。"
           exit 1
           ;;
         *) 
-          echo "Invalid input. Please enter 1, 2, or 3." 
+          echo "输入无效，请输入 1、2 或 3。" 
           ;;
         esac
       done
@@ -1170,10 +1170,10 @@ case "$MODULE" in
       # 2. Retry Loop
       while [ $attempt -le $max_attempts ]; do
         if [ $attempt -gt 1 ]; then
-          warn "Retrying '$pkg' ($context)... (Attempt $attempt/$max_attempts)"
+          warn "重试 '$pkg'（$context）...（第 $attempt/$max_attempts 次）"
           sleep $PACKAGE_RETRY_COOLDOWN_SECONDS # Cooldown
         else
-          log "Installing '$pkg' ($context)..."
+          log "安装 '$pkg'（$context）..."
         fi
     
         # Try installation
@@ -1181,7 +1181,7 @@ case "$MODULE" in
           install_success=true
           break
         else
-          warn "Attempt $attempt/$max_attempts failed for '$pkg'."
+          warn "第 $attempt/$max_attempts 次尝试失败：'$pkg'。"
         fi
     
         ((attempt++))
@@ -1189,13 +1189,13 @@ case "$MODULE" in
     
       # 3. Final Verification
       if [ "$install_success" = true ] && is_package_installed "$pkg"; then
-        success "Installed '$pkg'."
+        success "已安装 '$pkg'。"
       else
         critical_failure_handler "Failed to install '$pkg' after $max_attempts attempts."
       fi
     }
     
-    section "Phase 4" "Niri Desktop Environment"
+    section "阶段 4" "Niri 桌面环境"
     
     # ==============================================================================
     # STEP 0: Safety Checkpoint
@@ -1207,9 +1207,9 @@ case "$MODULE" in
     # ==============================================================================
     # STEP 1: Identify User & DM Check
     # ==============================================================================
-    log "Identifying user..."
+    log "识别用户..."
     detect_target_user
-    info_kv "Target" "$TARGET_USER"
+    info_kv "目标" "$TARGET_USER"
     
     # DM Check
     KNOWN_DMS=("gdm" "sddm" "lightdm" "lxdm" "slim" "xorg-xdm" "ly" "greetd")
@@ -1223,24 +1223,24 @@ case "$MODULE" in
     done
     
     if [ -n "$DM_FOUND" ]; then
-      info_kv "Conflict" "${H_RED}$DM_FOUND${NC}"
+      info_kv "冲突" "${H_RED}$DM_FOUND${NC}"
       SKIP_AUTOLOGIN=true
     else
-      read -t "$TTY_AUTOLOGIN_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Enable TTY auto-login? [Y/n] (Default Y): ${NC}")" choice || true
+      read -t "$TTY_AUTOLOGIN_TIMEOUT" -p "$(echo -e "   ${H_CYAN}启用 TTY 自动登录？[Y/n]（默认 Y）： ${NC}")" choice || true
       [[ "${choice:-Y}" =~ ^[Yy]$ ]] && SKIP_AUTOLOGIN=false || SKIP_AUTOLOGIN=true
     fi
     
     # ==============================================================================
     # STEP 2: Core Components
     # ==============================================================================
-    section "Step 1/9" "Core Components"
+    section "步骤 1/9" "核心组件"
     PKGS="niri xdg-desktop-portal-gnome fuzzel libnotify mako polkit-gnome"
     exe pacman -S --noconfirm --needed $PKGS
     
     # ==============================================================================
     # STEP 3: File Manager
     # ==============================================================================
-    section "Step 2/9" "File Manager"
+    section "步骤 2/9" "文件管理器"
     exe pacman -S --noconfirm --needed ffmpegthumbnailer gvfs-smb nautilus-open-any-terminal file-roller gnome-keyring gst-plugins-base gst-plugins-good gst-libav nautilus
     
     exe pacman -S --noconfirm --needed xdg-desktop-portal-gtk thunar tumbler ffmpegthumbnailer poppler-glib gvfs-smb file-roller thunar-archive-plugin gnome-keyring thunar-volman gvfs-mtp gvfs-gphoto2 webp-pixbuf-loader libgsf
@@ -1252,11 +1252,11 @@ case "$MODULE" in
     # Nautilus Nvidia/Input Fix
     configure_nautilus_user
     
-    section "Step 3/9" "Temp sudo file"
+    section "步骤 3/9" "临时 sudo 文件"
     
     SUDO_TEMP_FILE="/etc/sudoers.d/99_shorin_installer_temp"
     SUDO_TEMP_FILE="$(temp_sudo_begin "$TARGET_USER" "$SUDO_TEMP_FILE")"
-    log "Temp sudo file created..."
+    log "已创建临时 sudo 文件..."
     cleanup_sudo() {
       temp_sudo_end "$SUDO_TEMP_FILE"
     }
@@ -1264,7 +1264,7 @@ case "$MODULE" in
     # ==============================================================================
     # STEP 5: Dependencies (RESTORED FZF)
     # ==============================================================================
-    section "Step 4/9" "Dependencies"
+    section "步骤 4/9" "依赖"
     LIST_FILE="$PARENT_DIR/niri-applist.txt"
     
     # Ensure tools
@@ -1274,22 +1274,22 @@ case "$MODULE" in
       mapfile -t DEFAULT_LIST < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed 's/#.*//; s/AUR://g' | xargs -n1)
     
       if [ ${#DEFAULT_LIST[@]} -eq 0 ]; then
-        warn "App list is empty. Skipping."
+        warn "应用列表为空，跳过。"
         PACKAGE_ARRAY=()
       else
-        echo -e "\n   ${H_YELLOW}>>> Default installation in ${INSTALLATION_TIMEOUT}s. Press ANY KEY to customize...${NC}"
+        echo -e "\n   ${H_YELLOW}>>> ${INSTALLATION_TIMEOUT}s 后默认安装，按任意键自定义...${NC}"
     
         if read -t "$INSTALLATION_TIMEOUT" -n 1 -s -r; then
           # --- [RESTORED] Original FZF Selection Logic ---
           clear
-          log "Loading package list..."
+          log "加载软件包列表..."
     
-          SELECTED_LINES=$(fzf_select_apps "$LIST_FILE" "[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL")
+          SELECTED_LINES=$(fzf_select_apps "$LIST_FILE" "[TAB] 切换 | [ENTER] 安装 | [CTRL-D] 全不选 | [CTRL-A] 全选")
     
           clear
     
           if [ -z "$SELECTED_LINES" ]; then
-            warn "User cancelled selection. Installing NOTHING."
+            warn "用户取消选择，不安装任何内容。"
             PACKAGE_ARRAY=()
           else
             PACKAGE_ARRAY=()
@@ -1301,7 +1301,7 @@ case "$MODULE" in
           fi
           # -----------------------------------------------
         else
-          log "Auto-confirming ALL packages."
+          log "自动确认安装全部软件包。"
           PACKAGE_ARRAY=("${DEFAULT_LIST[@]}")
         fi
       fi
@@ -1310,7 +1310,7 @@ case "$MODULE" in
       if [ ${#PACKAGE_ARRAY[@]} -gt 0 ]; then
         BATCH_LIST=()
         AUR_LIST=()
-        info_kv "Target" "${#PACKAGE_ARRAY[@]} packages scheduled."
+        info_kv "目标" "计划安装 ${#PACKAGE_ARRAY[@]} 个软件包。"
     
         for pkg in "${PACKAGE_ARRAY[@]}"; do
           [ "$pkg" == "imagemagic" ] && pkg="imagemagick"
@@ -1319,7 +1319,7 @@ case "$MODULE" in
     
         # 1. Batch Install Repo Packages
         if [ ${#BATCH_LIST[@]} -gt 0 ]; then
-          log "Phase 1: Batch Installing Repo Packages..."
+          log "阶段 1：批量安装仓库软件包..."
           as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${BATCH_LIST[@]}" || true  # Batch mode, keep direct call
     
           # Verify Each
@@ -1330,7 +1330,7 @@ case "$MODULE" in
     
         # 2. Sequential AUR Install
         if [ ${#AUR_LIST[@]} -gt 0 ]; then
-          log "Phase 2: Installing AUR Packages (Sequential)..."
+          log "阶段 2：逐个安装 AUR 软件包..."
           for pkg in "${AUR_LIST[@]}"; do
             ensure_package_installed "$pkg" "AUR"
           done
@@ -1338,20 +1338,20 @@ case "$MODULE" in
     
         # Waybar fallback
         if ! command -v waybar &>/dev/null; then
-          warn "Waybar missing. Installing stock..."
+          warn "Waybar 缺失，安装默认版本..."
           exe pacman -S --noconfirm --needed waybar
         fi
       else
-        warn "No packages selected."
+        warn "未选择任何软件包。"
       fi
     else
-      warn "niri-applist.txt not found."
+      warn "未找到 niri-applist.txt。"
     fi
     
     # ==============================================================================
     # STEP 6: Dotfiles (Smart Recursive Symlink)
     # ==============================================================================
-    section "Step 5/9" "Deploying Dotfiles"
+    section "步骤 5/9" "部署 Dotfiles"
     
     # 使用本地 niri-dotfiles 目录
     LOCAL_NIRI_DOTFILES="$PARENT_DIR/niri-dotfiles"
@@ -1372,7 +1372,7 @@ case "$MODULE" in
     
         # 0. 排除检查
         if echo "$exclude_list" | grep -qw "$item_name"; then
-          log "Skipping excluded: $item_name"
+          log "跳过排除项：$item_name"
           continue
         fi
     
@@ -1414,21 +1414,21 @@ case "$MODULE" in
       critical_failure_handler "Local niri-dotfiles directory not found at: $LOCAL_NIRI_DOTFILES"
     fi
     
-    log "Deploying local niri-dotfiles..."
+    log "部署本地 niri-dotfiles..."
     
     # 处理排除列表
     EXCLUDE_LIST=""
     if [ "$TARGET_USER" != "shorin" ]; then
       EXCLUDE_FILE="$PARENT_DIR/exclude-dotfiles.txt"
       if [ -f "$EXCLUDE_FILE" ]; then
-        log "Loading exclusions..."
+        log "加载排除列表..."
         EXCLUDE_LIST=$(grep -vE "^\s*#|^\s*$" "$EXCLUDE_FILE" | tr '\n' ' ')
       fi
     fi
     
     # 备份现有配置
     if [ -d "$HOME_DIR/.config" ]; then
-      log "Backing up existing configs..."
+      log "备份现有配置..."
       as_user tar -czf "$HOME_DIR/config_backup_$(date +%s).tar.gz" -C "$HOME_DIR" .config 2>/dev/null || true
     fi
     
@@ -1451,7 +1451,7 @@ case "$MODULE" in
       BOOKMARKS_FILE="$HOME_DIR/.config/gtk-3.0/bookmarks"
       if [ -f "$BOOKMARKS_FILE" ]; then
         as_user sed -i "s/shorin/$TARGET_USER/g" "$BOOKMARKS_FILE"
-        log "Updated GTK bookmarks."
+        log "已更新 GTK 书签。"
       fi
     else
       if [ -f "$OUTPUT_EXAMPLE_KDL" ]; then
@@ -1481,7 +1481,7 @@ case "$MODULE" in
     if [ -d "$HOME_DIR/wallpapers" ]; then
       as_user mkdir -p "$HOME_DIR/Pictures"
       as_user mv "$HOME_DIR/wallpapers" "$HOME_DIR/Pictures/Wallpapers"
-      log "Wallpapers moved to Pictures/Wallpapers"
+      log "壁纸已移动到 Pictures/Wallpapers"
     fi
     
     # Templates
@@ -1490,16 +1490,16 @@ case "$MODULE" in
     echo "#!/bin/bash" | as_user tee "$HOME_DIR/Templates/new.sh" >/dev/null
     as_user chmod +x "$HOME_DIR/Templates/new.sh"
     
-    success "Dotfiles deployed successfully."
+    success "Dotfiles 部署完成。"
     
     # === remove gtk bottom =======
     if ! as_user gsettings set org.gnome.desktop.wm.preferences button-layout ":close"; then
-      warn "Failed to apply gsettings (no active session?)."
+      warn "应用 gsettings 失败（无活动会话？）。"
     fi
     # ==============================================================================
     # STEP 8: Hardware Tools
     # ==============================================================================
-    section "Step 7/9" "Hardware"
+    section "步骤 7/9" "硬件"
     if pacman -Q ddcutil &>/dev/null; then
       gpasswd -a "$TARGET_USER" i2c
       lsmod | grep -q i2c_dev || echo "i2c-dev" >/etc/modules-load.d/i2c-dev.conf
@@ -1507,12 +1507,12 @@ case "$MODULE" in
     if pacman -Q swayosd &>/dev/null; then
       systemctl_enable_now swayosd-libinput-backend.service >/dev/null 2>&1 || true
     fi
-    success "Tools configured."
+    success "工具已配置。"
     
     # ==============================================================================
     # STEP 9: Cleanup & Auto-Login
     # ==============================================================================
-    section "Final" "Cleanup & Boot"
+    section "最终" "清理与启动"
     temp_sudo_end "$SUDO_TEMP_FILE"
     trap - EXIT INT TERM
     
@@ -1521,10 +1521,10 @@ case "$MODULE" in
     LINK="$SVC_DIR/default.target.wants/niri-autostart.service"
     
     if [ "$SKIP_AUTOLOGIN" = true ]; then
-      log "Auto-login skipped."
+      log "已跳过自动登录。"
       as_user rm -f "$LINK" "$SVC_FILE"
     else
-      log "Configuring TTY Auto-login..."
+      log "配置 TTY 自动登录..."
       mkdir -p "/etc/systemd/system/getty@tty1.service.d"
       echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --noreset --noclear --autologin $TARGET_USER - \${TERM}" >"/etc/systemd/system/getty@tty1.service.d/autologin.conf"
     
@@ -1541,11 +1541,11 @@ case "$MODULE" in
 	EOT
       as_user ln -sf "../niri-autostart.service" "$LINK"
       chown -R "$TARGET_USER" "$SVC_DIR"
-      success "Enabled."
+      success "已启用。"
     fi
     
     trap - ERR
-    log "Module 04 completed."
+    log "模块 04 完成。"
     ;;
 
   "04d-gnome.sh")
@@ -1556,30 +1556,30 @@ case "$MODULE" in
     
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PARENT_DIR="$(dirname "$SCRIPT_DIR")"
-    log "Initializing installation..."
+    log "初始化安装..."
     
     check_root
     
     # ==============================================================================
     #  Identify User
     # ==============================================================================
-    log "Identifying user..."
+    log "识别用户..."
     detect_target_user
     TARGET_UID=$(id -u "$TARGET_USER")
     
-    info_kv "Target User" "$TARGET_USER"
-    info_kv "Home Dir"    "$HOME_DIR"
+    info_kv "目标用户" "$TARGET_USER"
+    info_kv "Home 目录"    "$HOME_DIR"
     
     # ==================================
     # temp sudo without passwd
     # ==================================
     SUDO_TEMP_FILE="/etc/sudoers.d/99_shorin_installer_temp"
     SUDO_TEMP_FILE="$(temp_sudo_begin "$TARGET_USER" "$SUDO_TEMP_FILE")"
-    log "Temp sudo file created..."
+    log "已创建临时 sudo 文件..."
     
     cleanup_sudo() {
         temp_sudo_end "$SUDO_TEMP_FILE"
-        log "Security: Temporary sudo privileges revoked."
+        log "安全：已撤销临时 sudo 权限。"
     }
     
     trap cleanup_sudo EXIT INT TERM
@@ -1587,8 +1587,8 @@ case "$MODULE" in
     #=================================================
     # Step 1: Install base pkgs
     #=================================================
-    section "Step 1" "Install base pkgs"
-    log "Installing GNOME and base tools..."
+    section "步骤 1" "安装基础软件包"
+    log "安装 GNOME 和基础工具..."
     if as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None \
         gnome-desktop gnome-backgrounds gnome-tweaks gdm ghostty celluloid loupe \
         gnome-control-center gnome-software flatpak file-roller \
@@ -1596,36 +1596,36 @@ case "$MODULE" in
         dnsmasq ttf-jetbrains-maple-mono-nf-xx-xx; then  # Batch install, keep direct call
     
             exe pacman -S --noconfirm --needed ffmpegthumbnailer gvfs-smb nautilus-open-any-terminal file-roller gnome-keyring gst-plugins-base gst-plugins-good gst-libav nautilus 
-            log "Packages installed successfully."
+            log "软件包安装成功。"
     
     else
-            error "Installation failed."
+            error "安装失败。"
             exit 1
     fi
     
     
     # start gdm 
-    log "Enable gdm..."
+    log "启用 gdm..."
     exe systemctl enable gdm
     
     #=================================================
     # Step 2: Set default terminal
     #=================================================
-    section "Step 2" "Set default terminal"
-    log "Setting GNOME default terminal to Ghostty..."
+    section "步骤 2" "设置默认终端"
+    log "设置 GNOME 默认终端为 Ghostty..."
     
     if ! as_user gsettings set org.gnome.desktop.default-applications.terminal exec 'ghostty'; then
-        warn "Failed to set GNOME default terminal (no active session?)."
+        warn "设置 GNOME 默认终端失败（无活动会话？）。"
     fi
     if ! as_user gsettings set org.gnome.desktop.default-applications.terminal exec-arg '-e'; then
-        warn "Failed to set GNOME terminal exec-arg (no active session?)."
+        warn "设置 GNOME 终端 exec-arg 失败（无活动会话？）。"
     fi
     
     #=================================================
     # Step 3: Set locale
     #=================================================
-    section "Step 3" "Set locale"
-    log "Configuring GNOME locale for user $TARGET_USER..."
+    section "步骤 3" "设置 locale"
+    log "为用户 $TARGET_USER 配置 GNOME locale..."
     ACCOUNT_FILE="/var/lib/AccountsService/users/$TARGET_USER"
     ACCOUNT_DIR=$(dirname "$ACCOUNT_FILE")
     # 确保目录存在
@@ -1639,15 +1639,15 @@ case "$MODULE" in
     #=================================================
     # Step 4: Configure Shortcuts
     #=================================================
-    section "Step 4" "Configure Shortcuts"
-    log "Configuring shortcuts..."
+    section "步骤 4" "配置快捷键"
+    log "配置快捷键..."
     
     # 使用 sudo -u 切换用户并注入 DBUS 变量以修改 dconf
     sudo -u "$TARGET_USER" bash <<-EOF
         # 关键：手动指定 DBUS 地址
         export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${TARGET_UID}/bus"
     
-        echo "   ➜ Applying shortcuts for user: $(whoami)..."
+        echo "   ➜ 为用户应用快捷键：$(whoami)..."
     
         # ---------------------------------------------------------
         # 1. org.gnome.desktop.wm.keybindings (窗口管理)
@@ -1736,14 +1736,14 @@ case "$MODULE" in
         CUSTOM_LIST="['\$P0', '\$P1', '\$P2', '\$P3', '\$P4', '\$P5']"
         gsettings set \$SCHEMA custom-keybindings "\$CUSTOM_LIST"
         
-        echo "   ➜ Shortcuts synced with config files successfully."
+        echo "   ➜ 快捷键已与配置文件同步完成。"
 	EOF
     
     #=================================================
     # Step 5: Extensions
     #=================================================
-    section "Step 5" "Install Extensions"
-    log "Installing Extensions CLI..."
+    section "步骤 5" "安装扩展"
+    log "安装 Extensions CLI..."
     
     install_yay_package gnome-extensions-cli
     
@@ -1765,10 +1765,10 @@ case "$MODULE" in
         "rounded-window-corners@fxgn"
         "appindicatorsupport@rgcjonas.gmail.com"
     )
-    log "Downloading extensions..."
+    log "下载扩展..."
     sudo -u $TARGET_USER gnome-extensions-cli install "${EXTENSION_LIST[@]}" 2>/dev/null
     
-    section "Step 5.2" "Enable GNOME Extensions"
+    section "步骤 5.2" "启用 GNOME 扩展"
     sudo -u "$TARGET_USER" bash <<-EOF
         export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${TARGET_UID}/bus"
     
@@ -1779,9 +1779,9 @@ case "$MODULE" in
             
             # 检查是否已经在列表中
             if [[ "\$current_list" == *"\$uuid"* ]]; then
-                echo "   -> Extension \$uuid already enabled."
+                echo "   -> 扩展 \$uuid 已启用。"
             else
-                echo "   -> Enabling extension: \$uuid"
+                echo "   -> 启用扩展：\$uuid"
                 # 如果列表为空 (@as [])，直接设置；否则追加
                 if [ "\$current_list" = "@as []" ]; then
                     gsettings set org.gnome.shell enabled-extensions "['\$uuid']"
@@ -1792,7 +1792,7 @@ case "$MODULE" in
             fi
         }
     
-        echo "   ➜ Activating extensions via gsettings..."
+        echo "   ➜ 通过 gsettings 激活扩展..."
     
         enable_extension "user-theme@gnome-shell-extensions.gcampax.github.com"
         enable_extension "arch-update@RaphaelRochet"
@@ -1811,18 +1811,18 @@ case "$MODULE" in
         enable_extension "rounded-window-corners@fxgn"
         enable_extension "appindicatorsupport@rgcjonas.gmail.com"
     
-        echo "   ➜ Extensions activation request sent."
+        echo "   ➜ 已发送扩展激活请求。"
 	EOF
     
     # 编译扩展 Schema (防止报错)
-    log "Compiling extension schemas..."
+    log "编译扩展 schema..."
     # 先确保所有权正确
     chown -R $TARGET_USER:$TARGET_USER $HOME_DIR/.local/share/gnome-shell/extensions
     
     sudo -u "$TARGET_USER" bash <<-EOF
         EXT_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
         
-        echo "   ➜ Compiling schemas in \$EXT_DIR..."
+        echo "   ➜ 在 \$EXT_DIR 编译 schema..."
         for dir in "\$EXT_DIR"/*; do
             if [ -d "\$dir/schemas" ]; then
                 glib-compile-schemas "\$dir/schemas"
@@ -1833,7 +1833,7 @@ case "$MODULE" in
     #=================================================
     # Firefox Policies
     #=================================================
-    section "Firefox" "Configuring Firefox GNOME Integration"
+    section "Firefox" "配置 Firefox GNOME 集成"
     exe install_yay_package gnome-browser-connector
     
     # 配置 Firefox 策略自动安装扩展
@@ -1851,7 +1851,7 @@ case "$MODULE" in
     }' > "$POL_DIR/policies.json"
     
     exe chmod 755 "$POL_DIR" && exe chmod 644 "$POL_DIR/policies.json"
-    log "Firefox policies updated."
+    log "Firefox 策略已更新。"
     #=================================================
     # nautilus fix
     #=================================================
@@ -1859,8 +1859,8 @@ case "$MODULE" in
     #=================================================
     # Step 6: Input Method
     #=================================================
-    section "Step 6" "Input method"
-    log "Configure input method environment..."
+    section "步骤 6" "输入法"
+    log "配置输入法环境..."
     
     if ! grep -q "fcitx" "/etc/environment" 2>/dev/null; then
         cat <<- EOT >> /etc/environment
@@ -1870,24 +1870,24 @@ case "$MODULE" in
     XMODIFIERS=@im=fcitx
     XDG_CURRENT_DESKTOP=GNOME
 	EOT
-        log "Fcitx environment variables added."
+        log "已添加 Fcitx 环境变量。"
     else
-        log "Fcitx environment variables already exist."
+        log "Fcitx 环境变量已存在。"
     fi
     
     #=================================================
     # Dotfiles
     #=================================================
-    section "Dotfiles" "Deploying dotfiles"
+    section "Dotfiles" "部署 dotfiles"
     GNOME_DOTFILES_DIR=$PARENT_DIR/gnome-dotfiles
     
     # 1. 确保目标目录存在
-    log "Ensuring .config exists..."
+    log "确保 .config 存在..."
     sudo -u $TARGET_USER mkdir -p $HOME_DIR/.config
     
     # 2. 复制文件 (包含隐藏文件)
     # 使用 /. 语法将源文件夹的*内容*合并到目标文件夹
-    log "Copying dotfiles..."
+    log "复制 dotfiles..."
     cp -rf "$GNOME_DOTFILES_DIR/." "$HOME_DIR/"
     as_user mkdir -p "$HOME_DIR/Templates"
     as_user touch "$HOME_DIR/Templates/new"
@@ -1895,7 +1895,7 @@ case "$MODULE" in
     as_user echo "#!/bin/bash" >> "$HOME_DIR/Templates/new.sh"
     # 3. 修复权限 (因为 cp 是 root 运行的)
     # 明确修复 home 目录下的关键配置文件夹，避免权限问题
-    log "Fixing permissions..."
+    log "修复权限..."
     chown -R $TARGET_USER:$TARGET_USER $HOME_DIR/.config
     chown -R $TARGET_USER:$TARGET_USER $HOME_DIR/.local
     
@@ -1907,7 +1907,7 @@ case "$MODULE" in
     
     # Shell工具已在common-applist.txt中，此处不重复安装
     
-    log "Installation Complete! Please reboot."
+    log "安装完成！请重启。"
     cleanup_sudo
     ;;
 
@@ -1929,12 +1929,12 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     if ! command -v grub-mkconfig >/dev/null 2>&1; then
         echo ""
-        warn "GRUB (grub-mkconfig) not found on this system."
-        log "Skipping GRUB theme installation."
+        warn "系统未找到 GRUB（grub-mkconfig）。"
+        log "跳过 GRUB 主题安装。"
         exit 0
     fi
     
-    section "Phase 7" "GRUB Customization & Theming"
+    section "阶段 7" "GRUB 定制与主题"
     
     # --- Helper Functions ---
     
@@ -1959,13 +1959,13 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 1. Advanced GRUB Configuration
     # ------------------------------------------------------------------------------
-    section "Step 1/5" "General GRUB Settings"
+    section "步骤 1/5" "常规 GRUB 设置"
     
-    log "Enabling GRUB to remember the last selected entry..."
+    log "启用 GRUB 记住上次选择..."
     set_grub_value "GRUB_DEFAULT" "saved"
     set_grub_value "GRUB_SAVEDEFAULT" "true"
     
-    log "Configuring kernel boot parameters for detailed logs and performance..."
+    log "配置内核启动参数以获得更详细日志和性能..."
     manage_kernel_param "remove" "quiet"
     manage_kernel_param "remove" "splash"
     manage_kernel_param "add" "loglevel=5"
@@ -1974,26 +1974,26 @@ case "$MODULE" in
     # CPU Watchdog Logic
     CPU_VENDOR=$(LC_ALL=C lscpu | grep "Vendor ID:" | awk '{print $3}')
     if [ "$CPU_VENDOR" == "GenuineIntel" ]; then
-        log "Intel CPU detected. Disabling iTCO_wdt watchdog."
+        log "检测到 Intel CPU，禁用 iTCO_wdt watchdog。"
         manage_kernel_param "add" "modprobe.blacklist=iTCO_wdt"
     elif [ "$CPU_VENDOR" == "AuthenticAMD" ]; then
-        log "AMD CPU detected. Disabling sp5100_tco watchdog."
+        log "检测到 AMD CPU，禁用 sp5100_tco watchdog。"
         manage_kernel_param "add" "modprobe.blacklist=sp5100_tco"
     fi
     
-    success "Kernel parameters updated."
+    success "内核参数已更新。"
     
     # ------------------------------------------------------------------------------
     # 2. Detect Themes
     # ------------------------------------------------------------------------------
-    section "Step 2/5" "Theme Detection"
-    log "Scanning for themes in 'grub-themes' folder..."
+    section "步骤 2/5" "主题检测"
+    log "扫描 'grub-themes' 文件夹中的主题..."
     
     SOURCE_BASE="$PARENT_DIR/grub-themes"
     DEST_DIR="/boot/grub/themes"
     
     if [ ! -d "$SOURCE_BASE" ]; then
-        warn "Directory 'grub-themes' not found in repo."
+        warn "仓库中未找到 'grub-themes' 目录。"
         # 继续执行后续步骤，不直接退出，因为可能只想改内核参数
         THEME_NAMES=()
     else
@@ -2010,7 +2010,7 @@ case "$MODULE" in
     fi
     
     if [ ${#THEME_NAMES[@]} -eq 0 ]; then
-        warn "No valid theme folders found."
+        warn "未找到有效主题目录。"
         # 若没找到主题，强制进入跳过模式
         SKIP_THEME=true
     fi
@@ -2018,7 +2018,7 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 3. Select Theme (TUI Menu)
     # ------------------------------------------------------------------------------
-    section "Step 3/5" "Theme Selection"
+    section "步骤 3/5" "主题选择"
     
     # 初始化变量
     SKIP_THEME="${SKIP_THEME:-false}"
@@ -2026,7 +2026,7 @@ case "$MODULE" in
     
     # 如果已经强制跳过（例如没找到文件夹），则不显示菜单
     if [ "$SKIP_THEME" == "true" ]; then
-        log "Skipping theme selection (No themes found)."
+        log "未找到主题，跳过主题选择。"
     else
         # Calculation & Menu Rendering
         TITLE_TEXT="Select GRUB Theme (${GRUB_THEME_SELECTION_TIMEOUT}s Timeout)"
@@ -2083,7 +2083,7 @@ case "$MODULE" in
     
         echo -e "${H_PURPLE}╰${LINE_STR}╯${NC}\n"
     
-        echo -ne "   ${H_YELLOW}Enter choice [1-$SKIP_IDX]: ${NC}"
+        echo -ne "   ${H_YELLOW}请输入选择 [1-$SKIP_IDX]： ${NC}"
         if ! read -t "$GRUB_THEME_SELECTION_TIMEOUT" USER_CHOICE; then
             USER_CHOICE=""
         fi
@@ -2092,41 +2092,41 @@ case "$MODULE" in
     
         # 验证输入
         if ! [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] || [ "$USER_CHOICE" -lt 1 ] || [ "$USER_CHOICE" -gt "$SKIP_IDX" ]; then
-            log "Invalid choice or timeout. Defaulting to first option..."
+            log "选择无效或超时，默认使用第一项..."
             SELECTED_INDEX=0
         elif [ "$USER_CHOICE" -eq "$SKIP_IDX" ]; then
             SKIP_THEME=true
-            info_kv "Selected" "None (Skip Theme Installation)"
+            info_kv "已选择" "无（跳过主题安装）"
         else
             SELECTED_INDEX=$((USER_CHOICE-1))
             THEME_SOURCE="${THEME_PATHS[$SELECTED_INDEX]}"
             THEME_NAME="${THEME_NAMES[$SELECTED_INDEX]}"
-            info_kv "Selected" "$THEME_NAME"
+            info_kv "已选择" "$THEME_NAME"
         fi
     fi
     
     # ------------------------------------------------------------------------------
     # 4. Install & Configure Theme
     # ------------------------------------------------------------------------------
-    section "Step 4/5" "Theme Installation"
+    section "步骤 4/5" "主题安装"
     
     if [ "$SKIP_THEME" == "true" ]; then
-        log "Skipping theme copy and configuration as requested."
+        log "按请求跳过主题复制与配置。"
         # 可选：如果选择不安装，是否要清理现有的 GRUB_THEME 配置？
         # 目前逻辑为“不触碰”，即保留现状。
     else
         if [ ! -d "$DEST_DIR" ]; then exe mkdir -p "$DEST_DIR"; fi
         if [ -d "$DEST_DIR/$THEME_NAME" ]; then
-            log "Removing existing version..."
+            log "移除已存在版本..."
             exe rm -rf "$DEST_DIR/$THEME_NAME"
         fi
     
         exe cp -r "$THEME_SOURCE" "$DEST_DIR/"
     
         if [ -f "$DEST_DIR/$THEME_NAME/theme.txt" ]; then
-            success "Theme installed."
+            success "主题已安装。"
         else
-            error "Failed to copy theme files."
+            error "复制主题文件失败。"
             exit 1
         fi
     
@@ -2151,9 +2151,9 @@ case "$MODULE" in
             if ! grep -q "^GRUB_GFXMODE=" "$GRUB_CONF"; then
                 echo 'GRUB_GFXMODE=auto' >> "$GRUB_CONF"
             fi
-            success "Configured GRUB to use theme."
+            success "已配置 GRUB 使用主题。"
         else
-            error "$GRUB_CONF not found."
+            error "未找到 $GRUB_CONF。"
             exit 1
         fi
     fi
@@ -2161,21 +2161,21 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 5. Add Shutdown/Reboot Menu Entries
     # ------------------------------------------------------------------------------
-    section "Step 5/5" "Menu Entries & Apply"
-    log "Adding Power Options to GRUB menu..."
+    section "步骤 5/5" "菜单项与应用"
+    log "向 GRUB 菜单添加电源选项..."
     
     cp /etc/grub.d/40_custom /etc/grub.d/99_custom
-    echo 'menuentry "Reboot"' {reboot} >> /etc/grub.d/99_custom
-    echo 'menuentry "Shutdown"' {halt} >> /etc/grub.d/99_custom
+    echo 'menuentry "重启"' {reboot} >> /etc/grub.d/99_custom
+    echo 'menuentry "关机"' {halt} >> /etc/grub.d/99_custom
     
-    success "Added grub menuentry 99-shutdown"
+    success "已添加 GRUB 菜单项 99-shutdown"
     
     # ------------------------------------------------------------------------------
     # 6. Apply Changes
     # ------------------------------------------------------------------------------
-    log "GRUB config regeneration deferred to final step."
+    log "GRUB 配置重新生成推迟到最后一步。"
     
-    log "Module 07 completed."
+    log "模块 07 完成。"
     ;;
 
   "99-apps.sh")
@@ -2197,7 +2197,7 @@ case "$MODULE" in
     
     # Ensure FZF is installed
     if ! command -v fzf &> /dev/null; then
-        log "Installing dependency: fzf..."
+        log "安装依赖：fzf..."
         pacman -S --noconfirm fzf >/dev/null 2>&1
     fi
     
@@ -2206,7 +2206,7 @@ case "$MODULE" in
     }
     
     handle_interrupt() {
-        echo -e "\n   ${H_YELLOW}>>> Operation cancelled by user (Ctrl+C). Skipping...${NC}"
+        echo -e "\n   ${H_YELLOW}>>> 操作被用户取消 (Ctrl+C)，跳过...${NC}"
         cleanup_sudo
     }
     
@@ -2216,11 +2216,11 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 0. Identify Target User & Helper
     # ------------------------------------------------------------------------------
-    section "Phase 5" "Common Applications"
+    section "阶段 5" "常用应用"
     
-    log "Identifying target user..."
+    log "识别目标用户..."
     detect_target_user
-    info_kv "Target" "$TARGET_USER"
+    info_kv "目标" "$TARGET_USER"
     
     # ------------------------------------------------------------------------------
     # 1. List Selection & User Prompt
@@ -2235,23 +2235,23 @@ case "$MODULE" in
     INSTALL_LAZYVIM=false
     
     if [ ! -f "$LIST_FILE" ]; then
-        warn "File $LIST_FILENAME not found. Skipping."
+        warn "未找到文件 $LIST_FILENAME，跳过。"
         trap - INT
         exit 0
     fi
     
     if ! grep -q -vE "^\s*#|^\s*$" "$LIST_FILE"; then
-        warn "App list is empty. Skipping."
+        warn "应用列表为空，跳过。"
         trap - INT
         exit 0
     fi
     
     echo ""
-    echo -e "   Selected List: ${BOLD}$LIST_FILENAME${NC}"
-    echo -e "   ${H_YELLOW}>>> Do you want to install common applications?${NC}"
-    echo -e "   ${H_CYAN}    [ENTER] = Select packages${NC}"
-    echo -e "   ${H_CYAN}    [N]     = Skip installation${NC}"
-    echo -e "   ${H_YELLOW}    [Timeout ${APPS_SELECTION_TIMEOUT}s] = Auto-install ALL default packages (No FZF)${NC}"
+    echo -e "   选择列表：${BOLD}$LIST_FILENAME${NC}"
+    echo -e "   ${H_YELLOW}>>> 是否安装常用应用？${NC}"
+    echo -e "   ${H_CYAN}    [回车]  = 选择软件包${NC}"
+    echo -e "   ${H_CYAN}    [N]     = 跳过安装${NC}"
+    echo -e "   ${H_YELLOW}    [超时 ${APPS_SELECTION_TIMEOUT}s] = 自动安装全部默认软件包（不使用 FZF）${NC}"
     echo ""
     
     if read -t "$APPS_SELECTION_TIMEOUT" -p "   Please select [Y/n]: " choice; then
@@ -2265,26 +2265,26 @@ case "$MODULE" in
     # Case 1: Timeout (Auto Install ALL)
     if [ $READ_STATUS -ne 0 ]; then
         echo "" 
-        warn "Timeout reached (${APPS_SELECTION_TIMEOUT}s). Auto-installing ALL applications from list..."
+        warn "超时（${APPS_SELECTION_TIMEOUT}s），自动安装列表中的全部应用..."
         SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/[[:space:]]+#/\t#/')
     
     # Case 2: User Input
     else
         choice=${choice:-Y}
         if [[ "$choice" =~ ^[nN]$ ]]; then
-            warn "User skipped application installation."
+            warn "用户选择跳过应用安装。"
             trap - INT
             exit 0
         else
             clear
-            echo -e "\n  Loading application list..."
+            echo -e "\n  加载应用列表..."
             
             SELECTED_RAW=$(fzf_select_apps "$LIST_FILE")
             
             clear
             
             if [ -z "$SELECTED_RAW" ]; then
-                log "Skipping application installation (User cancelled selection)."
+                log "跳过应用安装（用户取消选择）。"
                 trap - INT
                 exit 0
             fi
@@ -2294,7 +2294,7 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 2. Categorize Selection & Strip Prefixes (Includes LazyVim Check)
     # ------------------------------------------------------------------------------
-    log "Processing selection..."
+    log "处理选择..."
     
     while IFS= read -r line; do
         raw_pkg=$(echo "$line" | cut -f1 -d$'\t' | xargs)
@@ -2304,7 +2304,7 @@ case "$MODULE" in
         if [[ "${raw_pkg,,}" == "lazyvim" ]]; then
             INSTALL_LAZYVIM=true
             REPO_APPS+=("${LAZYVIM_DEPS[@]}")
-            info_kv "Config" "LazyVim detected" "Setup deferred to Post-Install"
+            info_kv "配置" "检测到 LazyVim" "设置延后到后安装"
             continue
         fi
     
@@ -2319,13 +2319,13 @@ case "$MODULE" in
         fi
     done <<< "$SELECTED_RAW"
     
-    info_kv "Scheduled" "Repo: ${#REPO_APPS[@]}" "AUR: ${#AUR_APPS[@]}" "Flatpak: ${#FLATPAK_APPS[@]}"
+    info_kv "计划" "Repo: ${#REPO_APPS[@]}" "AUR: ${#AUR_APPS[@]}" "Flatpak: ${#FLATPAK_APPS[@]}"
     
     # ------------------------------------------------------------------------------
     # [SETUP] GLOBAL SUDO CONFIGURATION
     # ------------------------------------------------------------------------------
     if [ ${#REPO_APPS[@]} -gt 0 ] || [ ${#AUR_APPS[@]} -gt 0 ]; then
-        log "Configuring temporary NOPASSWD for installation..."
+        log "配置临时 NOPASSWD 以便安装..."
         SUDO_TEMP_FILE="$(temp_sudo_begin "$TARGET_USER" "/etc/sudoers.d/99_shorin_installer_apps")"
     fi
     
@@ -2335,64 +2335,64 @@ case "$MODULE" in
     
     # --- A. Install Repo Apps (BATCH MODE) ---
     if [ ${#REPO_APPS[@]} -gt 0 ]; then
-        section "Step 1/3" "Official Repository Packages (Batch)"
+        section "步骤 1/3" "官方仓库软件包（批量）"
         
         REPO_QUEUE=()
         for pkg in "${REPO_APPS[@]}"; do
             if is_package_installed "$pkg"; then
-                log "Skipping '$pkg' (Already installed)."
+                log "跳过 '$pkg'（已安装）。"
             else
                 REPO_QUEUE+=("$pkg")
             fi
         done
     
         if [ ${#REPO_QUEUE[@]} -gt 0 ]; then
-            info_kv "Installing" "${#REPO_QUEUE[@]} packages via Pacman/Yay"
+            info_kv "安装" "通过 Pacman/Yay 安装 ${#REPO_QUEUE[@]} 个软件包"
             
             if ! exe as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${REPO_QUEUE[@]}"; then
-                error "Batch installation failed. Some repo packages might be missing."
+                error "批量安装失败，部分仓库软件包可能缺失。"
                 for pkg in "${REPO_QUEUE[@]}"; do
                     FAILED_PACKAGES+=("repo:$pkg")
                 done
             else
-                success "Repo batch installation completed."
+                success "仓库批量安装完成。"
             fi
         else
-            log "All Repo packages are already installed."
+            log "所有仓库软件包已安装。"
         fi
     fi
     
     # --- B. Install AUR Apps (INDIVIDUAL MODE + RETRY) ---
     if [ ${#AUR_APPS[@]} -gt 0 ]; then
-        section "Step 2/3" "AUR Packages "
+        section "步骤 2/3" "AUR 软件包"
         
         for app in "${AUR_APPS[@]}"; do
             if is_package_installed "$app"; then
-                log "Skipping '$app' (Already installed)."
+                log "跳过 '$app'（已安装）。"
                 continue
             fi
     
     
-            log "Installing AUR: $app ..."
+            log "安装 AUR：$app ..."
             install_success=false
             max_retries=1
             
             for (( i=0; i<=max_retries; i++ )); do
                 if [ $i -gt 0 ]; then
-                    warn "Retry $i/$max_retries for '$app' ..."
+                    warn "重试 $i/$max_retries：'$app' ..."
                 fi
                 
                 if install_yay_package "$app"; then
                     install_success=true
-                    success "Installed $app"
+                    success "已安装 $app"
                     break
                 else
-                    warn "Attempt $((i+1)) failed for $app"
+                    warn "第 $((i+1)) 次尝试失败：$app"
                 fi
             done
     
             if [ "$install_success" = false ]; then
-                error "Failed to install $app after $((max_retries+1)) attempts."
+                error "安装 $app 失败，已尝试 $((max_retries+1)) 次。"
                 FAILED_PACKAGES+=("aur:$app")
             fi
         done
@@ -2400,20 +2400,20 @@ case "$MODULE" in
     
     # --- C. Install Flatpak Apps (INDIVIDUAL MODE) ---
     if [ ${#FLATPAK_APPS[@]} -gt 0 ]; then
-        section "Step 3/3" "Flatpak Packages (Individual)"
+        section "步骤 3/3" "Flatpak 软件包（单个）"
         
         for app in "${FLATPAK_APPS[@]}"; do
             if flatpak info "$app" &>/dev/null; then
-                log "Skipping '$app' (Already installed)."
+                log "跳过 '$app'（已安装）。"
                 continue
             fi
     
-            log "Installing Flatpak: $app ..."
+            log "安装 Flatpak：$app ..."
             if ! exe flatpak install -y flathub "$app"; then
-                error "Failed to install: $app"
+                error "安装失败：$app"
                 FAILED_PACKAGES+=("flatpak:$app")
             else
-                success "Installed $app"
+                success "已安装 $app"
             fi
         done
     fi
@@ -2421,30 +2421,30 @@ case "$MODULE" in
     # ------------------------------------------------------------------------------
     # 4. Environment & Additional Configs (Virt/Wine/Steam/LazyVim)
     # ------------------------------------------------------------------------------
-    section "Post-Install" "System & App Tweaks"
+    section "后安装" "系统与应用调整"
     
     # --- [NEW] Virtualization Configuration (Virt-Manager) ---
     if is_package_installed virt-manager && ! systemd-detect-virt -q; then
-      info_kv "Config" "Virt-Manager detected"
+      info_kv "配置" "检测到 Virt-Manager"
       
       # 1. 安装完整依赖
       # iptables-nft 和 dnsmasq 是默认 NAT 网络必须的
-      log "Installing QEMU/KVM dependencies..."
+      log "安装 QEMU/KVM 依赖..."
       pacman -S --noconfirm --needed qemu-full virt-manager swtpm dnsmasq 
     
       # 2. 添加用户组 (需要重新登录生效)
-      log "Adding $TARGET_USER to libvirt group..."
+      log "将 $TARGET_USER 加入 libvirt 组..."
       usermod -a -G libvirt "$TARGET_USER"
       # 同时添加 kvm 和 input 组以防万一
       usermod -a -G kvm,input "$TARGET_USER"
     
       # 3. 开启服务
-      log "Enabling libvirtd service..."
+      log "启用 libvirtd 服务..."
       systemctl_enable_now libvirtd
     
       # 4. [修复] 强制设置 virt-manager 默认连接为 QEMU/KVM
       # 解决第一次打开显示 LXC 或无法连接的问题
-      log "Setting default URI to qemu:///system..."
+      log "设置默认 URI 为 qemu:///system..."
       
       # 编译 glib schemas (防止 gsettings 报错)
       glib-compile-schemas /usr/share/glib-2.0/schemas/
@@ -2452,36 +2452,36 @@ case "$MODULE" in
       # 强制写入 Dconf 配置
       # uris: 连接列表
       # autoconnect: 自动连接的列表
-      as_user gsettings set org.virt-manager.virt-manager.connections uris "['qemu:///system']" || warn "gsettings failed (no active session?)"
-      as_user gsettings set org.virt-manager.virt-manager.connections autoconnect "['qemu:///system']" || warn "gsettings failed (no active session?)"
+      as_user gsettings set org.virt-manager.virt-manager.connections uris "['qemu:///system']" || warn "gsettings 失败（无活动会话？）"
+      as_user gsettings set org.virt-manager.virt-manager.connections autoconnect "['qemu:///system']" || warn "gsettings 失败（无活动会话？）"
     
       # 5. 配置网络 (Default NAT)
-      log "Starting default network..."
+      log "启动默认网络..."
       sleep 3
-      virsh net-start default >/dev/null 2>&1 || warn "Default network might be already active."
+      virsh net-start default >/dev/null 2>&1 || warn "默认网络可能已处于活动状态。"
       virsh net-autostart default >/dev/null 2>&1 || true
       
-      success "Virtualization (KVM) configured."
+      success "虚拟化（KVM）已配置。"
     fi
     
     # --- [NEW] Wine Configuration & Fonts ---
     if command -v wine &>/dev/null; then
-      info_kv "Config" "Wine detected"
+      info_kv "配置" "检测到 Wine"
       
       # 1. 安装 Gecko 和 Mono
-      log "Ensuring Wine Gecko/Mono are installed..."
+      log "确保已安装 Wine Gecko/Mono..."
       pacman -S --noconfirm --needed wine wine-gecko wine-mono 
     
       # 2. 初始化 Wine (使用 wineboot -u 在后台运行，不弹窗)
       WINE_PREFIX="$HOME_DIR/.wine"
       if [ ! -d "$WINE_PREFIX" ]; then
-        log "Initializing wine prefix (This may take a minute)..."
+        log "初始化 wine prefix（可能需要一分钟）..."
         # WINEDLLOVERRIDES prohibits popups
         as_user env WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -u
         # Wait for completion
         as_user wineserver -w
       else
-        log "Wine prefix already exists."
+        log "Wine prefix 已存在。"
       fi
     
       # 3. 复制字体
@@ -2489,7 +2489,7 @@ case "$MODULE" in
       FONT_DEST="$WINE_PREFIX/drive_c/windows/Fonts"
     
       if [ -d "$FONT_SRC" ]; then
-        log "Copying Windows fonts from resources..."
+        log "从资源复制 Windows 字体..."
         
         # 1. 确保目标目录存在 (以用户身份创建)
         if [ ! -d "$FONT_DEST" ]; then
@@ -2500,71 +2500,71 @@ case "$MODULE" in
         # 使用 cp -rT 确保目录内容合并，而不是把源目录本身拷进去
         # 注意：这里假设 as_user 能够接受命令参数。如果 as_user 只是简单的 su/sudo 封装：
         if sudo -u "$TARGET_USER" cp -rf "$FONT_SRC"/. "$FONT_DEST/"; then
-            success "Fonts copied successfully."
+            success "字体复制成功。"
         else
-            error "Failed to copy fonts."
+            error "字体复制失败。"
         fi
     
         # 3. 强制刷新 Wine 字体缓存 (非常重要！)
         # 字体文件放进去了，但 Wine 不一定会立刻重修构建 fntdata.dat
         # 杀死 wineserver 会强制 Wine 下次启动时重新扫描系统和本地配置
-        log "Refreshing Wine font cache..."
+        log "刷新 Wine 字体缓存..."
         if command -v wineserver &> /dev/null; then
             # 必须以目标用户身份执行 wineserver -k
             as_user env WINEPREFIX="$WINE_PREFIX" wineserver -k
         fi
         
-        success "Wine fonts installed and cache refresh triggered."
+        success "Wine 字体已安装并触发缓存刷新。"
       else
-        warn "Resources font directory not found at: $FONT_SRC"
+        warn "未找到资源字体目录：$FONT_SRC"
       fi
     fi
     
     if command -v lutris &> /dev/null; then 
-        log "Lutris detected. Installing 32-bit gaming dependencies..."
+        log "检测到 Lutris，安装 32 位游戏依赖..."
         pacman -S --noconfirm --needed alsa-plugins giflib glfw gst-plugins-base-libs lib32-alsa-plugins lib32-giflib lib32-gst-plugins-base-libs lib32-gtk3 lib32-libjpeg-turbo lib32-libva lib32-mpg123  lib32-openal libjpeg-turbo libva libxslt mpg123 openal ttf-liberation
     fi
     # --- Steam Locale Fix ---
     STEAM_desktop_modified=false
     NATIVE_DESKTOP="/usr/share/applications/steam.desktop"
     if [ -f "$NATIVE_DESKTOP" ]; then
-        log "Checking Native Steam..."
+        log "检查 Native Steam..."
         if ! grep -q "env LANG=zh_CN.UTF-8" "$NATIVE_DESKTOP"; then
             exe sed -i 's|^Exec=/usr/bin/steam|Exec=env LANG=zh_CN.UTF-8 /usr/bin/steam|' "$NATIVE_DESKTOP"
             exe sed -i 's|^Exec=steam|Exec=env LANG=zh_CN.UTF-8 steam|' "$NATIVE_DESKTOP"
-            success "Patched Native Steam .desktop."
+            success "已修补 Native Steam .desktop。"
             STEAM_desktop_modified=true
         else
-            log "Native Steam already patched."
+            log "Native Steam 已经修补。"
         fi
     fi
     
     if command -v flatpak &>/dev/null; then
         if flatpak list | grep -q "com.valvesoftware.Steam"; then
-            log "Checking Flatpak Steam..."
+            log "检查 Flatpak Steam..."
             exe flatpak override --env=LANG=zh_CN.UTF-8 com.valvesoftware.Steam
-            success "Applied Flatpak Steam override."
+            success "已应用 Flatpak Steam override。"
             STEAM_desktop_modified=true
         fi
     fi
     
     # --- [MOVED] LazyVim Configuration ---
     if [ "$INSTALL_LAZYVIM" = true ]; then
-      section "Config" "Applying LazyVim Overrides"
+      section "配置" "应用 LazyVim 覆盖"
       NVIM_CFG="$HOME_DIR/.config/nvim"
     
       if [ -d "$NVIM_CFG" ]; then
         BACKUP_PATH="$HOME_DIR/.config/nvim.old.apps.$(date +%s)"
-        warn "Collision detected. Moving existing nvim config to $BACKUP_PATH"
+        warn "检测到冲突，移动现有 nvim 配置到 $BACKUP_PATH"
         mv "$NVIM_CFG" "$BACKUP_PATH"
       fi
     
-      log "Cloning LazyVim starter..."
+      log "克隆 LazyVim starter..."
       if as_user git clone https://github.com/LazyVim/starter "$NVIM_CFG"; then
         rm -rf "$NVIM_CFG/.git"
-        success "LazyVim installed (Override)."
+        success "LazyVim 已安装（覆盖）。"
       else
-        error "Failed to clone LazyVim."
+        error "克隆 LazyVim 失败。"
       fi
     fi
     
@@ -2586,8 +2586,8 @@ case "$MODULE" in
             fi
       fi
     }
-    section "Config" "Hiding useless .desktop files"
-    log "Hiding useless .desktop files"
+    section "配置" "隐藏无用的 .desktop 文件"
+    log "隐藏无用的 .desktop 文件"
     hide_desktop_file "/usr/share/applications/avahi-discover.desktop"
     hide_desktop_file "/usr/share/applications/qv4l2.desktop"
     hide_desktop_file "/usr/share/applications/qvidcap.desktop"
@@ -2614,25 +2614,25 @@ case "$MODULE" in
     hide_desktop_file "/usr/share/applications/xfce4-about.desktop"
     
     # --- Clash Configuration ---
-    section "Config" "Clash TUN Mode"
+    section "配置" "Clash TUN 模式"
     
     if command -v clash-verge-service &>/dev/null; then
-        log "Configuring Clash TUN service..."
+        log "配置 Clash TUN 服务..."
         /usr/bin/clash-verge-service &
         sleep 3
         clash-verge-service-uninstall &>/dev/null || true
         sleep 3
         clash-verge-service-install &>/dev/null || true
-        success "Clash service configured."
+        success "Clash 服务已配置。"
     else
-        log "Clash not installed, skipping."
+        log "未安装 Clash，跳过。"
     fi
     
     # ------------------------------------------------------------------------------
     # [FIX] CLEANUP GLOBAL SUDO CONFIGURATION
     # ------------------------------------------------------------------------------
     if [ -n "${SUDO_TEMP_FILE:-}" ]; then
-        log "Revoking temporary NOPASSWD..."
+        log "撤销临时 NOPASSWD..."
         temp_sudo_end "$SUDO_TEMP_FILE"
     fi
     
@@ -2646,24 +2646,24 @@ case "$MODULE" in
         if [ ! -d "$DOCS_DIR" ]; then as_user mkdir -p "$DOCS_DIR"; fi
         
         echo -e "\n========================================================" >> "$REPORT_FILE"
-        echo -e " Installation Failure Report - $(date)" >> "$REPORT_FILE"
+        echo -e " 安装失败报告 - $(date)" >> "$REPORT_FILE"
         echo -e "========================================================" >> "$REPORT_FILE"
         printf "%s\n" "${FAILED_PACKAGES[@]}" >> "$REPORT_FILE"
         
         chown "$TARGET_USER:$TARGET_USER" "$REPORT_FILE"
         
         echo ""
-        warn "Some applications failed to install."
-        warn "A report has been saved to:"
+        warn "部分应用安装失败。"
+        warn "报告已保存到："
         echo -e "   ${BOLD}$REPORT_FILE${NC}"
     else
-        success "All scheduled applications processed successfully."
+        success "所有计划应用已处理完成。"
     fi
     
     # Reset Trap
     trap - INT
     
-    log "Module 99-apps completed."
+    log "模块 99-apps 完成。"
     ;;
 
   "rollback")
@@ -2678,37 +2678,37 @@ case "$MODULE" in
 
     check_root
 
-    log "Searching for safety snapshots..."
+    log "搜索安全快照..."
     if ! command -v snapper &> /dev/null; then
-        error "Snapper is not installed."
+        error "Snapper 未安装。"
         exit 1
     fi
 
     ROOT_ID=$(snapper -c root list --columns number,description | grep -F "$MARKER" | awk '{print $1}' | tail -n 1)
     if [ -z "$ROOT_ID" ]; then
-        error "Critical: Could not find snapshot '$MARKER' for root."
+        error "严重：未找到 root 的快照 '$MARKER'。"
         exit 1
     fi
-    info_kv "Root Snapshot" "$ROOT_ID"
+    info_kv "Root 快照" "$ROOT_ID"
 
     HOME_ID=""
     if snapper list-configs | grep -q "^home "; then
         HOME_ID=$(snapper -c home list --columns number,description | grep -F "$MARKER" | awk '{print $1}' | tail -n 1)
         if [ -n "$HOME_ID" ]; then
-            info_kv "Home Snapshot" "$HOME_ID"
+            info_kv "Home 快照" "$HOME_ID"
         fi
     fi
 
-    log "Reverting / (Root)..."
+    log "还原 /（Root）..."
     snapper -c root undochange "$ROOT_ID"..0
 
     if [ -n "$HOME_ID" ]; then
-        log "Reverting /home..."
+        log "还原 /home..."
         snapper -c home undochange "$HOME_ID"..0
     fi
 
     if [ "$CLEAN_CACHE" = "1" ]; then
-        log "Cleaning package manager caches..."
+        log "清理包管理器缓存..."
         pacman -Sc --noconfirm || true
         MAIN_USER=$(awk -F: '$3 == 1000 {print $1}' /etc/passwd)
         if [ -n "$MAIN_USER" ]; then
@@ -2721,7 +2721,7 @@ case "$MODULE" in
         sed -i "/${REMOVE_MODULE//\//\\\\/}/d" "$REPO_DIR/.install_progress"
     fi
 
-    success "Rollback complete."
+    success "回滚完成。"
 
     if [ "$REBOOT" = "1" ]; then
         for i in $(seq "$REBOOT_COUNTDOWN_SECONDS" -1 1); do
@@ -2735,7 +2735,7 @@ case "$MODULE" in
     ;;
 
   *)
-    error "Unknown module: $MODULE"
+    error "未知模块：$MODULE"
     exit 1
     ;;
 esac

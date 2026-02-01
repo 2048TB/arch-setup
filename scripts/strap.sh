@@ -5,7 +5,7 @@
 # ==============================================================================
 
 set -Eeuo pipefail
-trap 'echo "Bootstrap failed. Check network or repo access."; exit 1' ERR
+trap 'echo "引导失败。请检查网络或仓库访问。"; exit 1' ERR
 
 # --- [配置区域] ---
 # 支持环境变量配置
@@ -39,7 +39,7 @@ fi
 
 # 1. 检查并安装 git
 if ! command -v git &> /dev/null; then
-    echo "Git not found. Installing..."
+    echo "未找到 Git，正在安装..."
     # ISO环境下无需sudo，已安装系统需要sudo
     if [ "$EUID" -eq 0 ]; then
         pacman -Sy --noconfirm git
@@ -53,21 +53,21 @@ WORK_DIR="$(pwd)"
 if [ -d /run/archiso ] || [[ "$(findmnt / -o FSTYPE -n 2>/dev/null)" =~ ^(overlay|tmpfs|airootfs)$ ]]; then
     # ISO环境：使用/root（有足够空间和权限）
     WORK_DIR="/root"
-    echo -e "\\033[0;33m>>> ISO environment detected. Using $WORK_DIR\\033[0m"
+    echo -e "\\033[0;33m>>> 检测到 ISO 环境，使用 $WORK_DIR\\033[0m"
 fi
 
 # 切换到工作目录
 cd "$WORK_DIR" || {
-    echo "Failed to change to $WORK_DIR"
+    echo "切换到 $WORK_DIR 失败"
     exit 1
 }
 
 # 3. 强力清理旧目录/文件
 if [ -e "$DIR_NAME" ]; then
-    echo "Removing existing '$DIR_NAME'..."
+    echo "正在移除已存在的 '$DIR_NAME'..."
     # 强制删除（可能是文件或目录）
     rm -rf "$DIR_NAME" 2>/dev/null || {
-        echo "Failed to remove. Trying with force..."
+        echo "移除失败，尝试强制删除..."
         chmod -R 755 "$DIR_NAME" 2>/dev/null
         rm -rf "$DIR_NAME"
     }
@@ -75,24 +75,24 @@ fi
 
 # 验证已清理
 if [ -e "$DIR_NAME" ]; then
-    echo -e "\\033[0;31mError: Cannot remove existing '$DIR_NAME'. Please remove manually.\\033[0m"
-    echo "Run: rm -rf $WORK_DIR/$DIR_NAME"
+    echo -e "\\033[0;31m错误：无法移除已存在的 '$DIR_NAME'，请手动删除。\\033[0m"
+    echo "运行：rm -rf $WORK_DIR/$DIR_NAME"
     exit 1
 fi
 
 # 4. 克隆指定分支 (-b 参数)
-echo "Cloning repository to $WORK_DIR/$DIR_NAME..."
+echo "正在克隆仓库到 $WORK_DIR/$DIR_NAME..."
 if git clone --depth 1 -b "$TARGET_BRANCH" "$REPO_URL"; then
-    echo "Clone successful."
+    echo "克隆成功。"
 else
-    echo -e "\033[0;31mError: Failed to clone branch '$TARGET_BRANCH'. Check if it exists.\033[0m"
+    echo -e "\033[0;31m错误：克隆分支 '$TARGET_BRANCH' 失败，请检查是否存在。\033[0m"
     exit 1
 fi
 
 # 5. 运行安装
 if [ -d "$DIR_NAME" ]; then
     cd "$DIR_NAME" || exit 1
-    echo "Starting installer..."
+    echo "开始运行安装器..."
     
     # ISO环境下已是root，已安装系统需要sudo
     if [ "$EUID" -eq 0 ]; then
@@ -101,6 +101,6 @@ if [ -d "$DIR_NAME" ]; then
         sudo bash scripts/install.sh
     fi
 else
-    echo "Error: Directory not found."
+    echo "错误：目录不存在。"
     exit 1
 fi

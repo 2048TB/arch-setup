@@ -56,7 +56,7 @@ export TEMP_LOG_FILE="/tmp/log-shorin-arch-setup.txt"
 on_error() {
     local line="${1:-?}"
     local src="${BASH_SOURCE[1]:-unknown}"
-    error "Unexpected error at ${src}:${line}"
+    error "在 ${src}:${line} 发生意外错误"
 }
 
 enable_strict_mode() {
@@ -86,7 +86,7 @@ load_config() {
     fi
 
     if [ -n "$config_file" ] && [ -f "$config_file" ]; then
-        log "Loading config: $config_file"
+        log "加载配置: $config_file"
         # shellcheck source=/dev/null
         set -a
         source "$config_file"
@@ -96,7 +96,7 @@ load_config() {
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo -e "${H_RED}   $CROSS CRITICAL ERROR: Script must be run as root.${NC}"
+        echo -e "${H_RED}   $CROSS 严重错误：脚本必须以 root 运行。${NC}"
         exit 1
     fi
 }
@@ -155,7 +155,7 @@ success() {
 
 # 警告日志 (突出显示)
 warn() {
-    echo -e "   $WARN ${H_YELLOW}${BOLD}WARNING:${NC} ${H_YELLOW}$1${NC}"
+    echo -e "   $WARN ${H_YELLOW}${BOLD}警告:${NC} ${H_YELLOW}$1${NC}"
     write_log "WARN" "$1"
 }
 
@@ -163,7 +163,7 @@ warn() {
 error() {
     echo -e ""
     echo -e "${H_RED}   ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
-    echo -e "${H_RED}   ┃  ERROR: $1${NC}"
+    echo -e "${H_RED}   ┃  错误: $1${NC}"
     echo -e "${H_RED}   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
     echo -e ""
     write_log "ERROR" "$1"
@@ -174,7 +174,7 @@ exe() {
     local full_command="$*"
     
     # Visual: 显示正在运行的命令
-    echo -e "   ${H_GRAY}┌──[ ${H_MAGENTA}EXEC${H_GRAY} ]────────────────────────────────────────────────────${NC}"
+    echo -e "   ${H_GRAY}┌──[ ${H_MAGENTA}执行${H_GRAY} ]────────────────────────────────────────────────────${NC}"
     echo -e "   ${H_GRAY}│${NC} ${H_CYAN}$ ${NC}${BOLD}$full_command${NC}"
     
     write_log "EXEC" "$full_command"
@@ -184,9 +184,9 @@ exe() {
     local status=$?
     
     if [ $status -eq 0 ]; then
-        echo -e "   ${H_GRAY}└──────────────────────────────────────────────────────── ${H_GREEN}OK${H_GRAY} ─┘${NC}"
+        echo -e "   ${H_GRAY}└──────────────────────────────────────────────────────── ${H_GREEN}完成${H_GRAY} ─┘${NC}"
     else
-        echo -e "   ${H_GRAY}└────────────────────────────────────────────────────── ${H_RED}FAIL${H_GRAY} ─┘${NC}"
+        echo -e "   ${H_GRAY}└────────────────────────────────────────────────────── ${H_RED}失败${H_GRAY} ─┘${NC}"
         write_log "FAIL" "Exit Code: $status"
         return $status
     fi
@@ -205,7 +205,7 @@ set_grub_value() {
     elif grep -q -E "^$key=" "$conf_file"; then
         exe sed -i -E "s,^$key=.*,$key=\"$escaped_value\"," "$conf_file"
     else
-        log "Appending new key: $key"
+        log "追加新键: $key"
         echo "$key=\"$escaped_value\"" >> "$conf_file"
     fi
 }
@@ -216,7 +216,7 @@ temp_sudo_begin() {
     local file="${2:-/etc/sudoers.d/99_shorin_installer_temp}"
 
     if [ -z "$user" ]; then
-        error "temp_sudo_begin: user is empty"
+        error "temp_sudo_begin: user 为空"
         return 1
     fi
 
@@ -347,13 +347,13 @@ select_flathub_mirror() {
     render_menu_footer "$menu_width"
     
     local choice
-    if ! read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Enter choice [1-${#names[@]}]: ${NC}")" choice; then
+    if ! read -t "$FLATHUB_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}请输入选择 [1-${#names[@]}]: ${NC}")" choice; then
         echo ""
     fi
     choice=${choice:-1}
     
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#names[@]}" ]; then
-        log "Invalid choice or timeout. Defaulting to SJTU..."
+        log "选择无效或超时，默认使用 SJTU..."
         choice=1
     fi
     
@@ -361,18 +361,18 @@ select_flathub_mirror() {
     local selected_name="${names[$index]}"
     local selected_url="${urls[$index]}"
     
-    log "Setting Flathub mirror to: ${H_GREEN}$selected_name${NC}"
+    log "设置 Flathub 镜像为: ${H_GREEN}$selected_name${NC}"
     
     if exe flatpak remote-modify flathub --url="$selected_url"; then
-        success "Mirror updated."
+        success "镜像已更新。"
     else
-        error "Failed to update mirror."
+        error "镜像更新失败。"
     fi
 }
 
 as_user() {
   if [ -z "${TARGET_USER:-}" ]; then
-    error "TARGET_USER not defined. Call detect_target_user first."
+    error "TARGET_USER 未定义，请先调用 detect_target_user。"
     return 1
   fi
   runuser -u "$TARGET_USER" -- "$@"
@@ -390,7 +390,7 @@ detect_target_user() {
     if [ -z "$detected" ]; then
       read -p "Target user: " TARGET_USER || TARGET_USER=""
       if [ -z "$TARGET_USER" ]; then
-        error "Target user required"
+        error "需要目标用户"
         return 1
       fi
     else
