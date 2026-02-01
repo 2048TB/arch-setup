@@ -365,6 +365,17 @@ info_kv "Root Partition" "$ROOT_PART"
 # ==============================================================================
 section "Step 3/7" "Formatting"
 
+# Ensure target partitions are not mounted (e.g. /mnt remnants or cache mounts)
+if mountpoint -q /mnt; then
+    exe umount -R /mnt
+fi
+if findmnt -n -o TARGET "$ROOT_PART" >/dev/null 2>&1; then
+    exe umount "$ROOT_PART"
+fi
+if [ "$BOOT_MODE" = "uefi" ] && findmnt -n -o TARGET "$EFI_PART" >/dev/null 2>&1; then
+    exe umount "$EFI_PART"
+fi
+
 if [ "$BOOT_MODE" = "uefi" ]; then
     log "Formatting EFI partition (FAT32)..."
     exe mkfs.fat -F32 "$EFI_PART"
