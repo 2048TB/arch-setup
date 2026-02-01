@@ -213,7 +213,7 @@ if [ ! -b "$TARGET_DISK" ]; then
     exit 1
 fi
 
-if [ "$(lsblk -no TYPE "$TARGET_DISK")" != "disk" ]; then
+if [ "$(lsblk -d -no TYPE "$TARGET_DISK")" != "disk" ]; then
     error "TARGET_DISK must be a disk (not a partition): $TARGET_DISK"
     exit 1
 fi
