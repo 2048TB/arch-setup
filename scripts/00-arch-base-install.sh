@@ -53,7 +53,8 @@ has_partitions() {
 # 检测是否为系统盘（有挂载分区）
 is_system_disk() {
     local disk="$1"
-    lsblk -n -o MOUNTPOINT "$disk" 2>/dev/null | grep -qE '^(/|/boot|/home|/var)'
+    # Only treat as system disk if mounted at /, /boot, /home, or /var (including subpaths)
+    lsblk -n -o MOUNTPOINT "$disk" 2>/dev/null | grep -qE '^/($|boot($|/)|home($|/)|var($|/))'
 }
 
 # 检测磁盘类型（过滤不适合的类型）
