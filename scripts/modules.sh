@@ -804,52 +804,12 @@ case "$MODULE" in
     # ==============================================================================
     # Phase 5: 部署用户配置文件
     # ==============================================================================
-    section "Step 5/5" "Deploying User Configs"
-    
-    CONFIGS_DIR="$(dirname "$SCRIPT_DIR")/configs"
-    
-    if [ -d "$CONFIGS_DIR" ]; then
-        log "Found configs directory: $CONFIGS_DIR"
-    
-        # 复制 .zshrc
-        if [ -f "$CONFIGS_DIR/.zshrc" ]; then
-            log "Deploying .zshrc..."
-            exe cp "$CONFIGS_DIR/.zshrc" "$REAL_HOME/.zshrc"
-            exe chown "$MY_USERNAME:$MY_USERNAME" "$REAL_HOME/.zshrc"
-            success "Deployed .zshrc"
-        fi
-    
-        # 复制 .bashrc (备用)
-        if [ -f "$CONFIGS_DIR/.bashrc" ]; then
-            log "Deploying .bashrc..."
-            exe cp "$CONFIGS_DIR/.bashrc" "$REAL_HOME/.bashrc"
-            exe chown "$MY_USERNAME:$MY_USERNAME" "$REAL_HOME/.bashrc"
-            success "Deployed .bashrc"
-        fi
-    
-        # 复制 .config 目录下的配置
-        if [ -d "$CONFIGS_DIR/.config" ]; then
-            log "Deploying .config files..."
-    
-            # 确保目标 .config 目录存在
-            exe runuser -u "$MY_USERNAME" -- mkdir -p "$REAL_HOME/.config"
-    
-            # 使用 rsync 或 cp -r 复制（保留权限）
-            if command -v rsync &>/dev/null; then
-                exe rsync -av --chown="$MY_USERNAME:$MY_USERNAME" "$CONFIGS_DIR/.config/" "$REAL_HOME/.config/"
-                success "Synced .config directory with rsync"
-            else
-                exe cp -r "$CONFIGS_DIR/.config/"* "$REAL_HOME/.config/" 2>/dev/null || true
-                exe chown -R "$MY_USERNAME:$MY_USERNAME" "$REAL_HOME/.config"
-                success "Copied .config directory"
-            fi
-        fi
-    
-        info_kv "Configs" "Deployed to $REAL_HOME"
-    else
-        warn "Configs directory not found at $CONFIGS_DIR"
-        log "Skipping user config deployment..."
-    fi
+    # Note: Shell配置(.zshrc/.bashrc)和应用配置(.config)
+    # 由各自的桌面环境模块部署：
+    #   - 04-niri-setup.sh    → niri-dotfiles/   (包含所有配置)
+    #   - 04d-gnome.sh        → gnome-dotfiles/  (包含所有配置)
+    # ==============================================================================
+    log "User config deployment delegated to Desktop Environment modules."
     
     # ==============================================================================
     # 完成

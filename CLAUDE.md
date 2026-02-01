@@ -117,19 +117,17 @@ scripts/strap.sh → scripts/install.sh → modules.sh
 
 ## 配置部署
 
-**configs/** - Shell配置（所有桌面通用）
-- 部署时机：03-user.sh
-- 内容：.zshrc, starship.toml, ghostty, yazi
-- 方式：直接复制到 `$HOME`
-
 **niri-dotfiles/** - Niri完整配置
 - 部署时机：04-niri-setup.sh
-- 内容：niri/waybar/fuzzel/mako/主题/壁纸
-- 方式：`copy_recursive()` 递归复制
+- Shell配置：.zshrc, .bashrc, .vimrc
+- 应用配置：niri, waybar, fuzzel, mako, ghostty, yazi, starship
+- 主题资源：.themes, wallpapers
+- 复制方式：`copy_recursive()` 智能递归（穿透.config/.local）
 
 **gnome-dotfiles/** - GNOME配置
 - 部署时机：04d-gnome.sh
-- 内容：GTK/dconf/gnome-shell扩展
+- 内容：GTK主题, dconf设置, gnome-shell扩展, .config, .local
+- 复制方式：`cp -rf` 直接合并到$HOME
 
 ## 智能磁盘选择
 
