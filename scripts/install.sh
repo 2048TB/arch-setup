@@ -22,7 +22,6 @@ load_config
 enable_strict_mode
 
 # --- Constants ---
-readonly DESKTOP_SELECTION_TIMEOUT=120
 readonly REFLECTOR_TIMEOUT=60
 readonly REBOOT_COUNTDOWN_SECONDS=10
 readonly REFLECTOR_AGE_HOURS=24
@@ -94,58 +93,9 @@ show_banner() {
     echo ""
 }
 
-# --- Desktop Selection Menu ---
-select_desktop() {
-    show_banner
-    
-    # 1. 定义选项 (显示名称|内部ID)
-    local OPTIONS=(
-        "No Desktop |none"
-        "Shorin's Niri |niri"
-        "GNOME |gnome"
-    )
-    
-    # 2. 绘制菜单 (半开放式风格)
-    # 定义一条足够长的横线，或者固定长度
-    local HR="──────────────────────────────────────────────────"
-    
-    echo -e "${H_PURPLE}╭${HR}${NC}"
-    echo -e "${H_PURPLE}│${NC} ${BOLD}Choose your Desktop Environment:${NC}"
-    echo -e "${H_PURPLE}│${NC}" # 空行分隔
-
-    local idx=1
-    for opt in "${OPTIONS[@]}"; do
-        local name="${opt%%|*}"
-        # 直接打印，无需计算填充空格
-        echo -e "${H_PURPLE}│${NC}  ${H_CYAN}[${idx}]${NC} ${name}"
-        ((idx++))
-    done
-    echo -e "${H_PURPLE}│${NC}" # 空行分隔
-    echo -e "${H_PURPLE}╰${HR}${NC}"
-    echo ""
-    
-    # 3. 输入处理
-    echo -e "   ${DIM}Waiting for input (Timeout: 2 mins)...${NC}"
-    if ! read -t "$DESKTOP_SELECTION_TIMEOUT" -p "$(echo -e "   ${H_YELLOW}Select [1-${#OPTIONS[@]}]: ${NC}")" choice; then
-        choice=""
-    fi
-    
-    if [ -z "$choice" ]; then
-        echo -e "\n${H_RED}Timeout or no selection.${NC}"
-        exit 1
-    fi
-    
-    # 4. 验证并提取 ID
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#OPTIONS[@]}" ]; then
-        local selected_opt="${OPTIONS[$((choice-1))]}"
-        export DESKTOP_ENV="${selected_opt##*|}" # 提取 ID
-        log "Selected: ${selected_opt%%|*}"
-    else
-        error "Invalid selection."
-        exit 1
-    fi
-    sleep 0.5
-}
+# --- Fixed Desktop Environment ---
+export DESKTOP_ENV="niri"
+log "Desktop Environment: Niri (Fixed)"
 sys_dashboard() {
     echo -e "${H_BLUE}╔════ SYSTEM DIAGNOSTICS ══════════════════════════════╗${NC}"
     echo -e "${H_BLUE}║${NC} ${BOLD}Kernel${NC}   : $(uname -r)"
@@ -196,26 +146,12 @@ if is_iso_environment && [ "${SKIP_BASE_INSTALL:-0}" != "1" ]; then
     fi
 fi
 
-if [ -n "${DESKTOP_ENV:-}" ]; then
-    DESKTOP_ENV="${DESKTOP_ENV,,}"
-    case "$DESKTOP_ENV" in
-        niri|gnome|none)
-            log "Using DESKTOP_ENV from config/env: $DESKTOP_ENV"
-            ;;
-        *)
-            error "Invalid DESKTOP_ENV: $DESKTOP_ENV (use niri|gnome|none)"
-            exit 1
-            ;;
-    esac
-else
-    select_desktop
-fi
 clear
 show_banner
 sys_dashboard
 
-# Dynamic Module List
-BASE_MODULES=(
+# Fixed Module List for Niri
+MODULES=(
     "00-btrfs-init.sh"
     "01-base.sh"
     "02-musthave.sh"
@@ -223,25 +159,9 @@ BASE_MODULES=(
     "03-user.sh"
     "03b-gpu-driver.sh"
     "03c-snapshot-before-desktop.sh"
+    "04-niri-setup.sh"
+    "99-apps.sh"
 )
-
-case "$DESKTOP_ENV" in
-    niri)
-        BASE_MODULES+=("04-niri-setup.sh")
-        ;;
-    gnome)
-        BASE_MODULES+=("04d-gnome.sh")
-        ;;
-    none)
-        log "Skipping Desktop Environment installation."
-        ;;
-    *)
-        warn "Unknown selection, skipping desktop setup."
-        ;;
-esac
-
-BASE_MODULES+=("07-grub-theme.sh" "99-apps.sh")
-MODULES=("${BASE_MODULES[@]}")
 
 if [ "${1:-}" = "--module" ] && [ -n "${2:-}" ]; then
     ONLY_MODULE="$2"
