@@ -2167,13 +2167,7 @@ case "$MODULE" in
     readonly APPS_SELECTION_TIMEOUT=60
     
     check_root
-    
-    # Ensure FZF is installed
-    if ! command -v fzf &> /dev/null; then
-        log "Installing dependency: fzf..."
-        pacman -S --noconfirm fzf >/dev/null 2>&1
-    fi
-    
+
     cleanup_sudo() {
         temp_sudo_end "${SUDO_TEMP_FILE:-}"
     }
