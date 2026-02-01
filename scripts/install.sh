@@ -22,10 +22,7 @@ load_config
 enable_strict_mode
 
 # --- Constants ---
-readonly REFLECTOR_TIMEOUT=60
 readonly REBOOT_COUNTDOWN_SECONDS=10
-readonly REFLECTOR_AGE_HOURS=24
-readonly REFLECTOR_TOP_MIRRORS=10
 readonly EXIT_CODE_INTERRUPTED=130
 readonly EXIT_CODE_TIMEOUT=1
 
@@ -176,65 +173,13 @@ CURRENT_STEP=0
 log "Initializing installer sequence..."
 sleep 0.5
 
-# --- Reflector Mirror Update (State Aware) ---
-section "Pre-Flight" "Mirrorlist Optimization"
+# --- Skip Reflector (Use Default Mirrors) ---
+section "Pre-Flight" "Mirrorlist"
 
-# [MODIFIED] Check if already done
 if grep -q "^REFLECTOR_DONE$" "$STATE_FILE"; then
-    echo -e "   ${H_GREEN}✔${NC} Mirrorlist previously optimized."
-    echo -e "   ${DIM}   Skipping Reflector steps (Resume Mode)...${NC}"
+    log "Mirrorlist check skipped (Resume Mode)."
 else
-    # --- Start Reflector Logic ---
-    log "Checking Reflector..."
-    exe pacman -S --noconfirm --needed reflector
-
-    CURRENT_TZ=$(readlink -f /etc/localtime)
-    REFLECTOR_ARGS="-a $REFLECTOR_AGE_HOURS -f $REFLECTOR_TOP_MIRRORS --sort score --save /etc/pacman.d/mirrorlist --verbose"
-
-    if [[ "$CURRENT_TZ" == *"Shanghai"* ]]; then
-        echo ""
-        echo -e "${H_YELLOW}╔══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${H_YELLOW}║  DETECTED TIMEZONE: Asia/Shanghai                                ║${NC}"
-        echo -e "${H_YELLOW}║  Refreshing mirrors in China can be slow.                        ║${NC}"
-        echo -e "${H_YELLOW}║  Do you want to force refresh mirrors with Reflector?            ║${NC}"
-        echo -e "${H_YELLOW}╚══════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-        
-        if ! read -t "$REFLECTOR_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Run Reflector? [y/N] (Default No in ${REFLECTOR_TIMEOUT}s): ${NC}")" choice; then
-            echo ""
-        fi
-        choice=${choice:-N}
-        
-        if [[ "$choice" =~ ^[Yy]$ ]]; then
-            log "Running Reflector for China..."
-            if exe reflector $REFLECTOR_ARGS -c China; then
-                success "Mirrors updated."
-            else
-                warn "Reflector failed. Continuing with existing mirrors."
-            fi
-        else
-            log "Skipping mirror refresh."
-        fi
-    else
-        log "Detecting location for optimization..."
-        COUNTRY_CODE=$(curl -s --max-time 2 https://ipinfo.io/country || true)
-        
-        if [ -n "$COUNTRY_CODE" ]; then
-            info_kv "Country" "$COUNTRY_CODE" "(Auto-detected)"
-            log "Running Reflector for $COUNTRY_CODE..."
-            if ! exe reflector $REFLECTOR_ARGS -c "$COUNTRY_CODE"; then
-                warn "Country specific refresh failed. Trying global speed test..."
-                exe reflector $REFLECTOR_ARGS
-            fi
-        else
-            warn "Could not detect country. Running global speed test..."
-            exe reflector $REFLECTOR_ARGS
-        fi
-        success "Mirrorlist optimized."
-    fi
-    # --- End Reflector Logic ---
-
-    # [MODIFIED] Record success so we don't ask again
+    log "Using default mirrors (Reflector disabled)."
     echo "REFLECTOR_DONE" >> "$STATE_FILE"
 fi
 
