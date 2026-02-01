@@ -1091,8 +1091,6 @@ case "$MODULE" in
     # --- Constants ---
     readonly MAX_PACKAGE_INSTALL_ATTEMPTS=3
     readonly PACKAGE_RETRY_COOLDOWN_SECONDS=3
-    readonly TTY_AUTOLOGIN_TIMEOUT=20
-    readonly INSTALLATION_TIMEOUT=60
     
     check_root
     
@@ -1216,7 +1214,7 @@ case "$MODULE" in
     detect_target_user
     info_kv "Target" "$TARGET_USER"
     
-    # DM Check
+    # DM Check & Fixed TTY Auto-login
     KNOWN_DMS=("gdm" "sddm" "lightdm" "lxdm" "slim" "xorg-xdm" "ly" "greetd")
     SKIP_AUTOLOGIN=false
     DM_FOUND=""
@@ -1226,13 +1224,13 @@ case "$MODULE" in
         break
       fi
     done
-    
+
     if [ -n "$DM_FOUND" ]; then
       info_kv "Conflict" "${H_RED}$DM_FOUND${NC}"
       SKIP_AUTOLOGIN=true
     else
-      read -t "$TTY_AUTOLOGIN_TIMEOUT" -p "$(echo -e "   ${H_CYAN}Enable TTY auto-login? [Y/n] (Default Y): ${NC}")" choice || true
-      [[ "${choice:-Y}" =~ ^[Yy]$ ]] && SKIP_AUTOLOGIN=false || SKIP_AUTOLOGIN=true
+      log "TTY auto-login will be enabled (fixed)."
+      SKIP_AUTOLOGIN=false
     fi
     
     # ==============================================================================
@@ -1267,87 +1265,57 @@ case "$MODULE" in
     }
     trap cleanup_sudo EXIT INT TERM
     # ==============================================================================
-    # STEP 5: Dependencies (RESTORED FZF)
+    # STEP 5: Dependencies (Auto-install All)
     # ==============================================================================
     section "Step 4/9" "Dependencies"
     LIST_FILE="$PARENT_DIR/niri-applist.txt"
-    
-    # Ensure tools
-    command -v fzf &>/dev/null || pacman -S --noconfirm fzf >/dev/null 2>&1
-    
+
     if [ -f "$LIST_FILE" ]; then
-      mapfile -t DEFAULT_LIST < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed 's/#.*//; s/AUR://g' | xargs -n1)
-    
-      if [ ${#DEFAULT_LIST[@]} -eq 0 ]; then
-        warn "App list is empty. Skipping."
-        PACKAGE_ARRAY=()
+      log "Reading Niri application list..."
+      mapfile -t ALL_APPS < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/\s*#.*//')
+
+      if [ ${#ALL_APPS[@]} -eq 0 ]; then
+        warn "No applications found in niri-applist.txt"
       else
-        echo -e "\n   ${H_YELLOW}>>> Default installation in ${INSTALLATION_TIMEOUT}s. Press ANY KEY to customize...${NC}"
-    
-        if read -t "$INSTALLATION_TIMEOUT" -n 1 -s -r; then
-          # --- [RESTORED] Original FZF Selection Logic ---
-          clear
-          log "Loading package list..."
-    
-          SELECTED_LINES=$(fzf_select_apps "$LIST_FILE" "[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-D] DE-ALL | [CTRL-A] SE-ALL")
-    
-          clear
-    
-          if [ -z "$SELECTED_LINES" ]; then
-            warn "User cancelled selection. Installing NOTHING."
-            PACKAGE_ARRAY=()
+        log "Installing ${#ALL_APPS[@]} Niri dependencies..."
+
+        REPO_APPS=()
+        AUR_APPS=()
+
+        for app in "${ALL_APPS[@]}"; do
+          if [[ "$app" == AUR:* ]]; then
+            AUR_APPS+=("${app#AUR:}")
           else
-            PACKAGE_ARRAY=()
-            while IFS= read -r line; do
-              raw_pkg=$(echo "$line" | cut -f1 -d$'\t' | xargs)
-              clean_pkg="${raw_pkg#AUR:}"
-              [ -n "$clean_pkg" ] && PACKAGE_ARRAY+=("$clean_pkg")
-            done <<<"$SELECTED_LINES"
+            REPO_APPS+=("$app")
           fi
-          # -----------------------------------------------
-        else
-          log "Auto-confirming ALL packages."
-          PACKAGE_ARRAY=("${DEFAULT_LIST[@]}")
-        fi
-      fi
-    
-      # --- Installation Loop ---
-      if [ ${#PACKAGE_ARRAY[@]} -gt 0 ]; then
-        BATCH_LIST=()
-        AUR_LIST=()
-        info_kv "Target" "${#PACKAGE_ARRAY[@]} packages scheduled."
-    
-        for pkg in "${PACKAGE_ARRAY[@]}"; do
-          [ "$pkg" == "imagemagic" ] && pkg="imagemagick"
-          [[ "$pkg" == "AUR:"* ]] && AUR_LIST+=("${pkg#AUR:}") || BATCH_LIST+=("$pkg")
         done
-    
-        # 1. Batch Install Repo Packages
-        if [ ${#BATCH_LIST[@]} -gt 0 ]; then
-          log "Phase 1: Batch Installing Repo Packages..."
-          as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${BATCH_LIST[@]}" || true  # Batch mode, keep direct call
-    
+
+        # Install repo packages in batch
+        if [ ${#REPO_APPS[@]} -gt 0 ]; then
+          log "Phase 1: Batch Installing ${#REPO_APPS[@]} Repo Packages..."
+          as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "${REPO_APPS[@]}" || true
+
           # Verify Each
-          for pkg in "${BATCH_LIST[@]}"; do
+          for pkg in "${REPO_APPS[@]}"; do
             ensure_package_installed "$pkg" "Repo"
           done
         fi
-    
-        # 2. Sequential AUR Install
-        if [ ${#AUR_LIST[@]} -gt 0 ]; then
-          log "Phase 2: Installing AUR Packages (Sequential)..."
-          for pkg in "${AUR_LIST[@]}"; do
-            ensure_package_installed "$pkg" "AUR"
+
+        # Install AUR packages one by one
+        if [ ${#AUR_APPS[@]} -gt 0 ]; then
+          log "Phase 2: Installing ${#AUR_APPS[@]} AUR Packages (Sequential)..."
+          for aur_app in "${AUR_APPS[@]}"; do
+            ensure_package_installed "$aur_app" "AUR"
           done
         fi
-    
+
         # Waybar fallback
         if ! command -v waybar &>/dev/null; then
           warn "Waybar missing. Installing stock..."
           exe pacman -S --noconfirm --needed waybar
         fi
-      else
-        warn "No packages selected."
+
+        success "Niri dependencies installed."
       fi
     else
       warn "niri-applist.txt not found."
