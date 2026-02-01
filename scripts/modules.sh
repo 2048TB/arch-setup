@@ -2164,8 +2164,8 @@ case "$MODULE" in
     LAZYVIM_DEPS=("neovim" "ripgrep" "fd" "ttf-jetbrains-mono-nerd" "git")
     
     # --- Constants ---
-    readonly APPS_SELECTION_TIMEOUT=60
-    
+    # (No timeout needed - auto-install mode)
+
     check_root
 
     cleanup_sudo() {
@@ -2213,50 +2213,10 @@ case "$MODULE" in
         exit 0
     fi
     
-    echo ""
-    echo -e "   Selected List: ${BOLD}$LIST_FILENAME${NC}"
-    echo -e "   ${H_YELLOW}>>> Do you want to install common applications?${NC}"
-    echo -e "   ${H_CYAN}    [ENTER] = Select packages${NC}"
-    echo -e "   ${H_CYAN}    [N]     = Skip installation${NC}"
-    echo -e "   ${H_YELLOW}    [Timeout ${APPS_SELECTION_TIMEOUT}s] = Auto-install ALL default packages (No FZF)${NC}"
-    echo ""
-    
-    if read -t "$APPS_SELECTION_TIMEOUT" -p "   Please select [Y/n]: " choice; then
-        READ_STATUS=0
-    else
-        READ_STATUS=$?
-    fi
-    
-    SELECTED_RAW=""
-    
-    # Case 1: Timeout (Auto Install ALL)
-    if [ $READ_STATUS -ne 0 ]; then
-        echo "" 
-        warn "Timeout reached (${APPS_SELECTION_TIMEOUT}s). Auto-installing ALL applications from list..."
-        SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/[[:space:]]+#/\t#/')
-    
-    # Case 2: User Input
-    else
-        choice=${choice:-Y}
-        if [[ "$choice" =~ ^[nN]$ ]]; then
-            warn "User skipped application installation."
-            trap - INT
-            exit 0
-        else
-            clear
-            echo -e "\n  Loading application list..."
-            
-            SELECTED_RAW=$(fzf_select_apps "$LIST_FILE")
-            
-            clear
-            
-            if [ -z "$SELECTED_RAW" ]; then
-                log "Skipping application installation (User cancelled selection)."
-                trap - INT
-                exit 0
-            fi
-        fi
-    fi
+    # Auto-install all applications from common-applist.txt
+    log "Auto-installing ALL applications from: $LIST_FILENAME"
+
+    SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/[[:space:]]+#/\t#/')
     
     # ------------------------------------------------------------------------------
     # 2. Categorize Selection & Strip Prefixes (Includes LazyVim Check)
