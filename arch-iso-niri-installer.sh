@@ -4,7 +4,6 @@ set -Eeuo pipefail
 # Arch ISO one-key installer (auto wipe + niri/noctalia/ghostty).
 # Run in Arch ISO as root.
 
-readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ASSETS_DIR="${SCRIPT_DIR}"
 readonly ASSETS_CONFIG_DIR="${ASSETS_DIR}/configs"
@@ -13,9 +12,9 @@ readonly ASSETS_SOFTWARE_LIST="${ASSETS_DIR}/software-packages.txt"
 # -----------------------
 # User-tunable variables
 # -----------------------
-INSTALL_USER="${INSTALL_USER:-shorin}"
-INSTALL_PASSWORD="${INSTALL_PASSWORD:-shorin}"
-ROOT_PASSWORD="${ROOT_PASSWORD:-$INSTALL_PASSWORD}"
+INSTALL_USER="${INSTALL_USER:-}"
+INSTALL_PASSWORD="${INSTALL_PASSWORD:-}"
+ROOT_PASSWORD="${ROOT_PASSWORD:-}"
 HOST_NAME="${HOST_NAME:-arch-niri}"
 TIME_ZONE="${TIME_ZONE:-Asia/Shanghai}"
 LOCALE_MAIN="${LOCALE_MAIN:-en_US.UTF-8}"
@@ -27,6 +26,7 @@ AUTO_REBOOT="${AUTO_REBOOT:-1}" # 1|0
 ALLOW_NON_ISO="${ALLOW_NON_ISO:-0}" # 1 to bypass ISO-only guard
 ADD_USER_TO_ROOT_GROUP="${ADD_USER_TO_ROOT_GROUP:-0}" # 1|0 (not recommended)
 AUTO_LOGIN_TTY1="${AUTO_LOGIN_TTY1:-1}" # 1|0
+GPU_PROFILE="${GPU_PROFILE:-select}" # select|auto|1|2|3|4
 
 readonly MIN_DISK_BYTES=$((20 * 1024 * 1024 * 1024))
 readonly WORK_DIR="/tmp/arch-niri-installer"
@@ -61,29 +61,133 @@ require_root() {
   fi
 }
 
+ensure_iso_toolchain() {
+  local -a must_cmds=(
+    lsblk findmnt wipefs sgdisk parted partprobe udevadm mkfs.fat mkfs.btrfs btrfs
+    pacstrap genfstab arch-chroot
+    chpasswd useradd usermod runuser
+  )
+  local -a bootstrap_pkgs=(
+    arch-install-scripts
+    util-linux
+    shadow
+    gptfdisk
+    parted
+    dosfstools
+    btrfs-progs
+    pciutils
+    systemd
+  )
+  local -a missing_cmds=()
+  local cmd
+
+  require_cmd pacman
+
+  for cmd in "${must_cmds[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing_cmds+=("$cmd")
+    fi
+  done
+
+  if [[ ${#missing_cmds[@]} -gt 0 ]]; then
+    warn "ISO 环境缺少命令: ${missing_cmds[*]}"
+    log "尝试通过 pacman 安装安装器所需工具..."
+    pacman -Sy --noconfirm --needed "${bootstrap_pkgs[@]}"
+  fi
+
+  for cmd in "${must_cmds[@]}"; do
+    require_cmd "$cmd"
+  done
+}
+
+is_valid_username() {
+  local username="$1"
+  [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]] && [[ "$username" != "root" ]]
+}
+
+validate_zero_one_flag() {
+  local key="$1"
+  local value="$2"
+  [[ "$value" =~ ^[01]$ ]] || {
+    err "${key} 仅支持 0 或 1"
+    exit 1
+  }
+}
+
+trim_space() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+prompt_hidden_password() {
+  local prompt_text="$1"
+  local p1="" p2=""
+  while true; do
+    read -r -s -p "$prompt_text" p1
+    echo
+    read -r -s -p "请再次输入确认: " p2
+    echo
+    [[ -n "$p1" ]] || {
+      warn "密码不能为空，请重新输入。"
+      continue
+    }
+    [[ "$p1" == "$p2" ]] || {
+      warn "两次密码不一致，请重新输入。"
+      continue
+    }
+    printf '%s' "$p1"
+    return 0
+  done
+}
+
+collect_identity_inputs() {
+  if [[ -z "$INSTALL_USER" || -z "$INSTALL_PASSWORD" || -z "$ROOT_PASSWORD" ]]; then
+    if [[ ! -t 0 ]]; then
+      err "非交互终端下必须显式设置 INSTALL_USER/INSTALL_PASSWORD/ROOT_PASSWORD。"
+      exit 1
+    fi
+  fi
+
+  if [[ -z "$INSTALL_USER" ]]; then
+    while true; do
+      read -r -p "请输入新用户名: " INSTALL_USER
+      if is_valid_username "$INSTALL_USER"; then
+        break
+      fi
+      warn "用户名非法：需小写字母/数字/_/-，不能以数字开头且不能为 root。"
+    done
+  fi
+
+  if [[ -z "$INSTALL_PASSWORD" ]]; then
+    INSTALL_PASSWORD="$(prompt_hidden_password "请输入用户密码: ")"
+  fi
+
+  if [[ -z "$ROOT_PASSWORD" ]]; then
+    local same_as_user
+    read -r -p "root 密码与用户密码相同吗？[Y/n]: " same_as_user
+    if [[ -z "$same_as_user" || "$same_as_user" =~ ^[Yy]$ ]]; then
+      ROOT_PASSWORD="$INSTALL_PASSWORD"
+    else
+      ROOT_PASSWORD="$(prompt_hidden_password "请输入 root 密码: ")"
+    fi
+  fi
+}
+
 validate_inputs() {
-  [[ "$AUTO_REBOOT" =~ ^[01]$ ]] || {
-    err "AUTO_REBOOT 仅支持 0 或 1"
-    exit 1
-  }
-  [[ "$ALLOW_NON_ISO" =~ ^[01]$ ]] || {
-    err "ALLOW_NON_ISO 仅支持 0 或 1"
-    exit 1
-  }
-  [[ "$ADD_USER_TO_ROOT_GROUP" =~ ^[01]$ ]] || {
-    err "ADD_USER_TO_ROOT_GROUP 仅支持 0 或 1"
-    exit 1
-  }
-  [[ "$AUTO_LOGIN_TTY1" =~ ^[01]$ ]] || {
-    err "AUTO_LOGIN_TTY1 仅支持 0 或 1"
-    exit 1
-  }
-  [[ "$INSTALL_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || {
+  validate_zero_one_flag AUTO_REBOOT "$AUTO_REBOOT"
+  validate_zero_one_flag ALLOW_NON_ISO "$ALLOW_NON_ISO"
+  validate_zero_one_flag ADD_USER_TO_ROOT_GROUP "$ADD_USER_TO_ROOT_GROUP"
+  validate_zero_one_flag AUTO_LOGIN_TTY1 "$AUTO_LOGIN_TTY1"
+
+  is_valid_username "$INSTALL_USER" || {
     err "INSTALL_USER 非法：仅支持小写字母/数字/_/-，且不能以数字开头。"
     exit 1
   }
-  [[ "$INSTALL_USER" != "root" ]] || {
-    err "INSTALL_USER 不能为 root。"
+
+  [[ "$HOST_NAME" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] || {
+    err "HOST_NAME 非法：仅支持字母/数字/-，不能以 - 开头或结尾，长度 1-63。"
     exit 1
   }
   [[ -n "$INSTALL_PASSWORD" ]] || {
@@ -94,6 +198,14 @@ validate_inputs() {
     err "ROOT_PASSWORD 不能为空。"
     exit 1
   }
+  [[ "$GPU_PROFILE" =~ ^(select|auto|1|2|3|4)$ ]] || {
+    err "GPU_PROFILE 仅支持 select|auto|1|2|3|4"
+    exit 1
+  }
+  [[ -f "/usr/share/zoneinfo/${TIME_ZONE}" ]] || {
+    err "TIME_ZONE 无效或不存在: ${TIME_ZONE}"
+    exit 1
+  }
 }
 
 is_arch_iso() {
@@ -102,7 +214,14 @@ is_arch_iso() {
 
 resolve_boot_mode() {
   case "$BOOT_MODE" in
-    uefi|bios) ;;
+    uefi)
+      if [[ ! -d /sys/firmware/efi/efivars ]]; then
+        err "当前环境未检测到 UEFI 固件变量（/sys/firmware/efi/efivars）。"
+        err "请在 UEFI 模式启动 Arch ISO，或将 BOOT_MODE 设为 auto/bios。"
+        exit 1
+      fi
+      ;;
+    bios) ;;
     auto)
       if [[ -d /sys/firmware/efi/efivars ]]; then
         BOOT_MODE="uefi"
@@ -118,6 +237,58 @@ resolve_boot_mode() {
   log "Boot mode: $BOOT_MODE"
 }
 
+resolve_gpu_profile() {
+  local has_amd=0 has_nvidia=0 line
+
+  if [[ "$GPU_PROFILE" == "select" ]]; then
+    if [[ -t 0 ]]; then
+      echo "请选择 GPU 方案："
+      echo "  1) 无 GPU"
+      echo "  2) AMDGPU"
+      echo "  3) NVIDIA"
+      echo "  4) AMD 核显 + NVIDIA"
+      while true; do
+        read -r -p "输入 1/2/3/4: " GPU_PROFILE
+        if [[ "$GPU_PROFILE" =~ ^[1-4]$ ]]; then
+          break
+        fi
+        warn "输入无效，请输入 1、2、3 或 4。"
+      done
+    else
+      warn "GPU_PROFILE=select 但当前非交互终端，自动回退到 auto。"
+      GPU_PROFILE="auto"
+    fi
+  fi
+
+  if [[ "$GPU_PROFILE" == "auto" ]]; then
+    if command -v lspci >/dev/null 2>&1; then
+      while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        [[ "$line" == *amd* || "$line" == *advanced*micro*devices* || "$line" == *ati* ]] && has_amd=1
+        [[ "$line" == *nvidia* ]] && has_nvidia=1
+      done < <(lspci -nn | awk '/VGA compatible controller|3D controller|Display controller/ {print tolower($0)}')
+    else
+      warn "未找到 lspci，GPU_PROFILE=auto 将回退为 1(无 GPU)。"
+    fi
+    if [[ "$has_amd" == "1" && "$has_nvidia" == "1" ]]; then
+      GPU_PROFILE="4"
+    elif [[ "$has_amd" == "1" ]]; then
+      GPU_PROFILE="2"
+    elif [[ "$has_nvidia" == "1" ]]; then
+      GPU_PROFILE="3"
+    else
+      GPU_PROFILE="1"
+    fi
+  fi
+
+  case "$GPU_PROFILE" in
+    1) log "GPU 方案: 1) 无 GPU" ;;
+    2) log "GPU 方案: 2) AMDGPU" ;;
+    3) log "GPU 方案: 3) NVIDIA" ;;
+    4) log "GPU 方案: 4) AMD 核显 + NVIDIA" ;;
+  esac
+}
+
 part_path() {
   local disk="$1"
   local idx="$2"
@@ -129,7 +300,13 @@ part_path() {
 }
 
 select_target_disk() {
+  local normalized_target
   if [[ -n "$TARGET_DISK" ]]; then
+    normalized_target="$TARGET_DISK"
+    if [[ "$normalized_target" != /dev/* && -b "/dev/${normalized_target}" ]]; then
+      normalized_target="/dev/${normalized_target}"
+    fi
+    TARGET_DISK="$normalized_target"
     [[ -b "$TARGET_DISK" ]] || {
       err "TARGET_DISK 不存在或不是块设备: $TARGET_DISK"
       exit 1
@@ -140,16 +317,16 @@ select_target_disk() {
 
   local best_disk=""
   local best_size=0
-  while read -r name type rm size tran; do
+  while read -r path type rm size tran; do
     [[ "$type" == "disk" ]] || continue
     [[ "$rm" == "0" ]] || continue
     [[ "$tran" == "usb" ]] && continue
     [[ "$size" -ge "$MIN_DISK_BYTES" ]] || continue
     if (( size > best_size )); then
       best_size="$size"
-      best_disk="$name"
+      best_disk="$path"
     fi
-  done < <(lsblk -dnbo NAME,TYPE,RM,SIZE,TRAN)
+  done < <(lsblk -dnbo PATH,TYPE,RM,SIZE,TRAN)
 
   [[ -n "$best_disk" ]] || {
     err "未找到可用磁盘（要求：非 USB、非 removable、>=20GB）。"
@@ -159,6 +336,26 @@ select_target_disk() {
 
   TARGET_DISK="$best_disk"
   log "自动选择最大非 USB 磁盘: $TARGET_DISK"
+}
+
+ensure_target_disk_not_mounted() {
+  local dev mount_point
+  local has_blocking_mount=0
+
+  while IFS= read -r dev; do
+    while IFS= read -r mount_point; do
+      [[ -n "$mount_point" ]] || continue
+      if [[ "$mount_point" != /mnt && "$mount_point" != /mnt/* ]]; then
+        err "目标磁盘仍被挂载: ${dev} -> ${mount_point}"
+        has_blocking_mount=1
+      fi
+    done < <(findmnt -rn -S "$dev" -o TARGET || true)
+  done < <(lsblk -nrpo NAME "$TARGET_DISK")
+
+  if [[ "$has_blocking_mount" == "1" ]]; then
+    err "请先手动卸载目标盘所有非 /mnt 挂载点后再执行。"
+    exit 1
+  fi
 }
 
 confirm_wipe_countdown() {
@@ -173,18 +370,13 @@ prepare_resource_paths() {
     err "缺少资产目录: $ASSETS_CONFIG_DIR"
     exit 1
   }
-  [[ -d "${ASSETS_CONFIG_DIR}/niri" ]] || {
-    err "缺少目录: ${ASSETS_CONFIG_DIR}/niri"
-    exit 1
-  }
-  [[ -d "${ASSETS_CONFIG_DIR}/noctalia" ]] || {
-    err "缺少目录: ${ASSETS_CONFIG_DIR}/noctalia"
-    exit 1
-  }
-  [[ -d "${ASSETS_CONFIG_DIR}/ghostty" ]] || {
-    err "缺少目录: ${ASSETS_CONFIG_DIR}/ghostty"
-    exit 1
-  }
+  local dir
+  for dir in niri noctalia ghostty; do
+    [[ -d "${ASSETS_CONFIG_DIR}/${dir}" ]] || {
+      err "缺少目录: ${ASSETS_CONFIG_DIR}/${dir}"
+      exit 1
+    }
+  done
 }
 
 build_package_lists() {
@@ -221,6 +413,46 @@ build_package_lists() {
     flatpak_pkgs+=("$p")
   }
 
+  write_list_file() {
+    local out_file="$1"
+    shift
+    : > "$out_file"
+    if [[ "$#" -gt 0 ]]; then
+      printf '%s\n' "$@" | sort -u > "$out_file"
+    fi
+  }
+
+  add_detected_hardware_packages() {
+    local mode="$GPU_PROFILE"
+    local -a amd_repo=(vulkan-radeon lib32-vulkan-radeon libva-mesa-driver)
+    local -a nvidia_repo=(nvidia nvidia-utils lib32-nvidia-utils nvidia-settings nvidia-prime)
+
+    if grep -q 'GenuineIntel' /proc/cpuinfo 2>/dev/null; then
+      add_repo intel-ucode
+    elif grep -q 'AuthenticAMD' /proc/cpuinfo 2>/dev/null; then
+      add_repo amd-ucode
+    fi
+
+    case "$mode" in
+      1)
+        log "GPU 方案 1：不补充 GPU 驱动包。"
+        ;;
+      2)
+        for line in "${amd_repo[@]}"; do add_repo "$line"; done
+        log "GPU 方案 2：已补充 AMDGPU 驱动包。"
+        ;;
+      3)
+        for line in "${nvidia_repo[@]}"; do add_repo "$line"; done
+        log "GPU 方案 3：已补充 NVIDIA 驱动包。"
+        ;;
+      4)
+        for line in "${amd_repo[@]}"; do add_repo "$line"; done
+        for line in "${nvidia_repo[@]}"; do add_repo "$line"; done
+        log "GPU 方案 4：已补充 AMD 核显 + NVIDIA 驱动包。"
+        ;;
+    esac
+  }
+
   # Core: niri + ghostty + runtime essentials.
   local -a core_repo=(
     base-devel git niri ghostty
@@ -244,18 +476,20 @@ build_package_lists() {
     add_repo "$p"
   done
 
+  add_detected_hardware_packages
+
   if [[ -f "$ASSETS_SOFTWARE_LIST" ]]; then
     local raw_line line prefix pkg
     local line_no=0
     while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
       line_no=$((line_no + 1))
-      line="$(sed -E 's/[[:space:]]+#.*$//' <<<"$raw_line" | xargs)"
+      line="${raw_line%%#*}"
+      line="$(trim_space "$line")"
       [[ -n "$line" ]] || continue
-      [[ "$line" == \#* ]] && continue
 
       if [[ "$line" == *:* ]]; then
         prefix="${line%%:*}"
-        pkg="$(xargs <<<"${line#*:}")"
+        pkg="$(trim_space "${line#*:}")"
         if [[ -z "$pkg" ]]; then
           warn "软件清单第 ${line_no} 行格式错误（缺少包名），已跳过。"
           continue
@@ -276,9 +510,9 @@ build_package_lists() {
     warn "未找到统一软件清单: $ASSETS_SOFTWARE_LIST，仅安装内置核心软件。"
   fi
 
-  printf '%s\n' "${repo_pkgs[@]}" | sort -u > "$REPO_LIST_FILE"
-  printf '%s\n' "${aur_pkgs[@]}" | sort -u > "$AUR_LIST_FILE"
-  printf '%s\n' "${flatpak_pkgs[@]}" | sort -u > "$FLATPAK_LIST_FILE"
+  write_list_file "$REPO_LIST_FILE" "${repo_pkgs[@]}"
+  write_list_file "$AUR_LIST_FILE" "${aur_pkgs[@]}"
+  write_list_file "$FLATPAK_LIST_FILE" "${flatpak_pkgs[@]}"
   log "Repo packages: $(wc -l < "$REPO_LIST_FILE" | tr -d ' ')"
   log "AUR  packages: $(wc -l < "$AUR_LIST_FILE" | tr -d ' ')"
   log "Flatpak apps : $(wc -l < "$FLATPAK_LIST_FILE" | tr -d ' ')"
@@ -732,6 +966,8 @@ final_summary() {
 
 main() {
   require_root
+  ensure_iso_toolchain
+  collect_identity_inputs
   validate_inputs
   if ! is_arch_iso; then
     if [[ "$ALLOW_NON_ISO" == "1" ]]; then
@@ -742,21 +978,12 @@ main() {
     fi
   fi
 
-  # Required commands in ISO environment.
-  local -a req_cmds=(
-    lsblk wipefs sgdisk parted partprobe udevadm mkfs.fat mkfs.btrfs btrfs
-    pacstrap genfstab arch-chroot
-    chpasswd useradd usermod runuser
-  )
-  local c
-  for c in "${req_cmds[@]}"; do
-    require_cmd "$c"
-  done
-
   resolve_boot_mode
+  resolve_gpu_profile
   prepare_resource_paths
   build_package_lists
   select_target_disk
+  ensure_target_disk_not_mounted
   confirm_wipe_countdown
   wipe_and_partition_disk
   format_and_mount_btrfs

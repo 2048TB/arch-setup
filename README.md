@@ -23,13 +23,15 @@ chmod +x ./arch-iso-niri-installer.sh
 ./arch-iso-niri-installer.sh
 ```
 
+脚本会先在 ISO 中检查安装器依赖命令；缺失时会先用 `pacman` 自动补齐，再继续安装流程。
+
 ## 常用环境变量
 
 ```bash
 # 基础身份
-export INSTALL_USER="shorin"
-export INSTALL_PASSWORD="change_me"
-export ROOT_PASSWORD="change_me_root"
+export INSTALL_USER="your_user"
+export INSTALL_PASSWORD="your_user_password"
+export ROOT_PASSWORD="your_root_password"
 export HOST_NAME="arch-niri"
 
 # 安装行为
@@ -39,9 +41,25 @@ export AUTO_REBOOT="1"              # 1|0
 export ALLOW_NON_ISO="0"            # 1|0
 export AUTO_LOGIN_TTY1="1"          # 1|0
 export ADD_USER_TO_ROOT_GROUP="0"   # 1|0，不推荐
+export GPU_PROFILE="select"         # select|auto|1|2|3|4
 
 ./arch-iso-niri-installer.sh
 ```
+
+说明：
+- `INSTALL_USER`、`INSTALL_PASSWORD`、`ROOT_PASSWORD` 为必填。
+- 若未设置且在交互终端运行，脚本会提示你输入（密码带二次确认）。
+- 非交互终端下未设置上述三项会直接退出。
+- `HOST_NAME` 需满足 Linux hostname 规范（1-63 位，仅字母/数字/-，且不能以 `-` 开头或结尾）。
+- `TIME_ZONE` 必须是系统存在的时区文件（如 `Asia/Shanghai`、`UTC`）。
+
+GPU 方案说明：
+- `select`：运行时交互选择 1~4
+- `1`：无 GPU
+- `2`：AMDGPU
+- `3`：NVIDIA
+- `4`：AMD 核显 + NVIDIA
+- `auto`：自动识别并映射到上述 4 类
 
 ## 软件清单格式
 
@@ -67,6 +85,7 @@ flatpak:com.discordapp.Discord
 - 蓝牙组件安装后自动启用 `bluetooth.service`。
 - 自动部署 niri/noctalia/ghostty/fcitx5/shell 配置。
 - 自动创建多语言开发目录（Go/Rust/Node/Python/Zig/C-C++）与常见工具链路径目录。
+- 自动按 `GPU_PROFILE` 4 种方案补充显卡驱动包。
 
 ## 建议验证
 
