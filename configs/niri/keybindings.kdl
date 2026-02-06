@@ -1,0 +1,268 @@
+binds {
+    // 按键由用 + 连接的修饰键组成，末尾是 XKB 键名。
+    // 可使用 wev 等程序查找具体键名。
+    //
+    // “Mod” 是特殊修饰键：在 TTY 下等同 Super，在 winit 窗口下等同 Alt。
+    //
+    // 此处多数动作也可通过 `niri msg action do-something` 以程序方式调用。
+
+    // Mod-Shift-/（通常等同 Mod-?）会显示重要快捷键列表。
+    Mod+Shift+Slash { show-hotkey-overlay; }
+
+    // 建议的程序启动快捷键：终端、应用启动器、锁屏。
+    Mod+Return { spawn "ghostty"; }
+    Mod+Shift+Return { spawn "ghostty"; }
+
+    // 启动器
+    Mod+D { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
+    Mod+Space { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
+    XF86Search { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
+    Mod+P { spawn "vicinae"; }
+
+    // 手动锁屏（关闭了自动锁屏）
+    CTRL+Alt+L { spawn "noctalia-shell" "ipc" "call" "lockScreen" "lock"; }
+
+    // 使用 spawn-sh 运行 shell 命令，如需管道、多条命令等。
+    // 注意：整条命令作为单个参数传递，原样交给 `sh -c`。
+    // 例如：下面是切换屏幕阅读器（orca）的常见绑定。
+    // Super+Alt+S allow-when-locked=true hotkey-overlay-title=null { spawn-sh "pkill orca || exec orca"; }
+
+    // PipeWire 与 WirePlumber 的音量键示例。
+    // allow-when-locked=true 让其在锁屏时生效。
+    // 使用 spawn-sh 可一次传递多个参数。
+    // "-l 1.0" 将音量限制为 100%。
+    // XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.01+ --limit 1.0"; }
+    // XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.01-"; }
+    // XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
+    // XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "increase"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "decrease"; }
+    XF86AudioMute allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "muteOutput"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "muteInput"; }
+
+
+    // 使用 playerctl 的媒体键示例。
+    // 适用于任何支持 MPRIS 的播放器。
+    // XF86AudioPlay        allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    // XF86AudioStop        allow-when-locked=true { spawn-sh "playerctl stop"; }
+    // XF86AudioPrev        allow-when-locked=true { spawn-sh "playerctl previous"; }
+    // XF86AudioNext        allow-when-locked=true { spawn-sh "playerctl next"; }
+    XF86AudioPlay        allow-when-locked=true { spawn-sh "noctalia-shell ipc call media playPause"; }
+    XF86AudioStop        allow-when-locked=true { spawn-sh "noctalia-shell ipc call media pause"; }
+    XF86AudioPrev        allow-when-locked=true { spawn-sh "noctalia-shell ipc call media previous"; }
+    XF86AudioNext        allow-when-locked=true { spawn-sh "noctalia-shell ipc call media next"; }
+
+    // brightnessctl 的亮度键示例。
+    // 也可使用普通 spawn 传多个参数（避免走 "sh"），
+    // 但需要将每个参数单独放在 "" 中。
+    // XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "1%+"; }
+    // XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "1%-"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "increase"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "decrease"; }
+
+    // 键盘背光
+    XF86KbdBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--device=kbd_backlight" "set" "10%+"; }
+    XF86KbdBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--device=kbd_backlight" "set" "10%-"; }
+
+    // 打开/关闭概览：工作区与窗口的缩略视图。
+    // 也可将鼠标移到左上角热区，
+    // 或在触控板上四指上滑。
+    // Mod+O repeat=false { toggle-overview; }
+
+    Mod+Left { focus-column-left; }
+    Mod+Down { focus-window-down; }
+    Mod+Up { focus-window-up; }
+    Mod+Right { focus-column-right; }
+    Mod+H { focus-column-left; }
+    Mod+J { focus-window-down; }
+    Mod+K { focus-window-up; }
+    Mod+L { focus-column-right; }
+    Mod+Ctrl+Left { move-column-left; }
+    Mod+Ctrl+Down { move-window-down; }
+    Mod+Ctrl+Up { move-window-up; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+H { move-column-left; }
+    Mod+Ctrl+J { move-window-down; }
+    Mod+Ctrl+K { move-window-up; }
+    Mod+Ctrl+L { move-column-right; }
+
+    // 到达列首/列尾时跨工作区移动的替代命令。
+    // Mod+J     { focus-window-or-workspace-down; }
+    // Mod+K     { focus-window-or-workspace-up; }
+    // Mod+Ctrl+J     { move-window-down-or-to-workspace-down; }
+    // Mod+Ctrl+K     { move-window-up-or-to-workspace-up; }
+
+    Mod+Home { focus-column-first; }
+    Mod+End  { focus-column-last; }
+    Mod+Ctrl+Home { move-column-to-first; }
+    Mod+Ctrl+End  { move-column-to-last; }
+    // 分体式键盘友好别名（避免 Home/End 层键）。
+    Mod+N { focus-column-first; }
+    Mod+M { focus-column-last; }
+    Mod+Ctrl+N { move-column-to-first; }
+    Mod+Ctrl+M { move-column-to-last; }
+
+    Mod+Shift+Left  { focus-monitor-left; }
+    Mod+Shift+Down  { focus-monitor-down; }
+    Mod+Shift+Up    { focus-monitor-up; }
+    Mod+Shift+Right { focus-monitor-right; }
+    Mod+Shift+H     { focus-monitor-left; }
+    Mod+Shift+J     { focus-monitor-down; }
+    Mod+Shift+K     { focus-monitor-up; }
+    Mod+Shift+L     { focus-monitor-right; }
+
+    Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+Down  { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+Up    { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+Right { move-column-to-monitor-right; }
+    Mod+Shift+Ctrl+H     { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+J     { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+K     { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+L     { move-column-to-monitor-right; }
+
+    // 也可以只移动单个窗口：
+    // Mod+Shift+Ctrl+Left  { move-window-to-monitor-left; }
+    // ...
+
+    // 也可将整个工作区移动到另一个显示器：
+    // Mod+Shift+Ctrl+Left  { move-workspace-to-monitor-left; }
+    // ...
+
+    "Mod+Page_Down"      { focus-workspace-down; }
+    "Mod+Page_Up" { focus-workspace-up; }
+    Mod+U { focus-workspace-down; }
+    Mod+I { focus-workspace-up; }
+    "Mod+Ctrl+Page_Down" { move-column-to-workspace-down; }
+    "Mod+Ctrl+Page_Up" { move-column-to-workspace-up; }
+    Mod+Ctrl+U { move-column-to-workspace-down; }
+    Mod+Ctrl+I { move-column-to-workspace-up; }
+    "Mod+Shift+Page_Down" { move-workspace-down; }
+    "Mod+Shift+Page_Up" { move-workspace-up; }
+    Mod+Shift+U { move-workspace-down; }
+    Mod+Shift+I { move-workspace-up; }
+
+      // 可按索引引用工作区。但 niri 使用动态工作区系统，
+    // 这些命令属于“尽力而为”。当索引大于当前工作区数量时，
+    // 会指向最底部的（空）工作区。
+    //
+    // 例如有 2 个工作区 + 1 个空位时，索引 3、4、5 等都会指向第 3 个工作区。
+    Mod+1 { focus-workspace "1terminal"; }
+    Mod+2 { focus-workspace "2browser"; }
+    Mod+3 { focus-workspace "3chat"; }
+    Mod+4 { focus-workspace "4music"; }
+    Mod+5 { focus-workspace "5mail"; }
+    Mod+6 { focus-workspace "6file"; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+0 { focus-workspace "0other"; }
+    Mod+Ctrl+1 { move-column-to-workspace "1terminal"; }
+    Mod+Ctrl+2 { move-column-to-workspace "2browser"; }
+    Mod+Ctrl+3 { move-column-to-workspace "3chat"; }
+    Mod+Ctrl+4 { move-column-to-workspace "4music"; }
+    Mod+Ctrl+5 { move-column-to-workspace "5mail"; }
+    Mod+Ctrl+6 { move-column-to-workspace "6file"; }
+    Mod+Ctrl+7 { move-column-to-workspace 7; }
+    Mod+Ctrl+8 { move-column-to-workspace 8; }
+    Mod+Ctrl+9 { move-column-to-workspace 9; }
+    Mod+Ctrl+0 { move-column-to-workspace "0other"; }
+
+    // 也可以只移动单个窗口：
+    // Mod+Ctrl+1 { move-window-to-workspace 1; }
+
+    // 在当前与上一个工作区之间切换焦点。
+    // Mod+Tab { focus-workspace-previous; }
+
+    // 以下绑定用于在列内/列外移动焦点窗口。
+    // 如果窗口独立存在，将其并入旁边的列；
+    // 若已在列内，则将其移出。
+    Mod+BracketLeft  { consume-or-expel-window-left; }
+    Mod+BracketRight { consume-or-expel-window-right; }
+    // 分体式键盘友好别名（避免依赖 []）。
+    Mod+Y { consume-or-expel-window-left; }
+    Mod+O { consume-or-expel-window-right; }
+
+    // 从右侧列吸入一个窗口到当前列底部。
+    Mod+Comma  { consume-window-into-column; }
+    // 将当前列底部窗口移到右侧。
+    Mod+Period { expel-window-from-column; }
+    // 分体式键盘友好别名（避免依赖 , .）。
+    Mod+Shift+Y { consume-window-into-column; }
+    Mod+Shift+O { expel-window-from-column; }
+
+    Mod+R { switch-preset-column-width; }
+    // 也可按反向顺序循环预设。
+    // Mod+R { switch-preset-column-width-back; }
+    Mod+Shift+R { switch-preset-window-height; }
+    Mod+Ctrl+R { reset-window-height; }
+    Mod+F { maximize-column; }
+    Mod+Shift+F { fullscreen-window; }
+
+    // 将当前列扩展到未被其他完整可见列占用的空间，
+    // 使其“填满剩余空间”。
+    Mod+Ctrl+F { expand-column-to-available-width; }
+
+    // 将所有完整可见的列居中显示。
+    Mod+Ctrl+C { center-visible-columns; }
+
+    // 更精细的宽度调整。
+    // 此命令还可以：
+    // * 以像素设置宽度："1000"
+    // * 以像素增减宽度："-5" 或 "+5"
+    // * 以屏幕宽度百分比设置："25%"
+    // * 以百分比增减宽度："-10%" 或 "+10%"
+    // 像素尺寸使用逻辑/缩放像素。例如输出缩放为 2.0 时，
+    // set-column-width "100" 会让列占用 200 物理像素。
+    Mod+Minus { set-column-width "-10%"; }
+    Mod+Equal { set-column-width "+10%"; }
+    // 分体式键盘友好别名（避免依赖 +/- 层键）。
+    Mod+Alt+H { set-column-width "-10%"; }
+    Mod+Alt+L { set-column-width "+10%"; }
+
+    // 与其他窗口同列时的更精细高度调整。
+    Mod+Shift+Minus { set-window-height "-10%"; }
+    Mod+Shift+Equal { set-window-height "+10%"; }
+    Mod+Alt+J { set-window-height "-10%"; }
+    Mod+Alt+K { set-window-height "+10%"; }
+
+    // 在浮动与平铺布局间切换当前窗口。
+    Mod+V       { toggle-window-floating; }
+
+    // 切换列的标签页显示模式。
+    // 该列窗口将以纵向标签显示，
+    // 而非堆叠在一起。
+    Mod+W { toggle-column-tabbed-display; }
+
+    // 切换布局的动作。
+    // 注意：若取消注释，请确保上面的 xkb 选项中没有相同快捷键。
+    // 同一快捷键若同时存在，会导致按下时切换两次（xkb 一次、niri 一次），从而失效。
+    // Mod+Space       { switch-layout "next"; }
+    // Mod+Shift+Space { switch-layout "prev"; }
+
+    Print { screenshot; }
+    Ctrl+Print { screenshot-screen; }
+    Alt+Print { screenshot-window; }
+
+    // 远程桌面客户端与软件 KVM 等应用可能请求 niri 停止处理此处快捷键，
+    // 以便将按键原样转发到远端机器。
+    // 建议绑定一个“逃生”快捷键切换抑制器，
+    // 避免故障应用把会话卡住。
+    //
+    // allow-inhibiting=false 也可用于其他绑定，
+    // 确保即使抑制器开启，niri 仍处理它们。
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+
+    // 退出动作会显示确认对话框，避免误退出。
+    Ctrl+Alt+Delete { quit; }
+    Mod+Q repeat=false { close-window; }
+
+    // 关闭显示器电源。要恢复，移动鼠标或按任意键。
+    Mod+Shift+P { power-off-monitors; }
+
+    // 实用快捷键
+    Mod+Shift+V { spawn "noctalia-shell" "ipc" "call" "launcher" "clipboard"; }
+    Mod+C { spawn "noctalia-shell" "ipc" "call" "launcher" "calculator"; }
+
+    Mod+S { spawn "noctalia-shell" "ipc" "call" "controlCenter" "toggle"; }
+    Mod+E { spawn "noctalia-shell" "ipc" "call" "sessionMenu" "toggle"; }
+}

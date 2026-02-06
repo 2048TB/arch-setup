@@ -1,0 +1,212 @@
+// 此配置使用 KDL 格式：https://kdl.dev
+// "/-" 用于注释掉后续节点。
+
+// 这是主配置文件，负责包含其他配置文件
+include "./keybindings.kdl"
+include "./windowrules.kdl"
+include "./noctalia-shell.kdl"
+
+// 开机启动程序
+spawn-at-startup "noctalia-shell"
+spawn-at-startup "fcitx5" "-d"
+
+// 输入设备配置。
+input {
+    keyboard {
+        xkb {
+            // 可以设置规则、型号、布局、变体与选项。
+            // 更多信息见 xkeyboard-config(7)。
+
+            // 例如：
+            // layout "us,ru"
+            // options "grp:win_space_toggle,compose:ralt,ctrl:nocaps"
+
+            // 如果此段为空，niri 会从 org.freedesktop.locale1 获取 xkb 设置。
+            // 可使用 localectl set-x11-keymap 管理这些设置。
+        }
+
+        // 启动时开启 NumLock；省略此项则禁用。
+        numlock
+
+        // 可设置键盘连发参数，默认值与 wlroots 和 sway 一致。
+        // Delay 为开始连发前的毫秒数；Rate 为每秒字符数。
+        // repeat-delay 600
+        // repeat-rate 25
+
+        // Niri 可全局（默认）或按窗口记忆键盘布局。
+        // - "global" - 所有窗口共享布局切换。
+        // - "window" - 每个窗口单独记录布局。
+        // track-layout "global"
+    }
+
+    // 接下来的部分是 libinput 设置。
+    // 省略某项会禁用或保持默认值。
+    // 所有被注释的设置仅为示例，非默认值。
+    touchpad {
+        // tap  // 轻触点击
+        dwt // 输入时禁用。
+        // dwtp // 使用指点杆时禁用。
+        natural-scroll // 反转滚动方向。
+        // accel-speed 0.2
+        // accel-profile "flat"
+        // tap-button-map "left-middle-right"
+    }
+
+    mouse {
+        // natural-scroll // 反转滚动方向。
+        // accel-speed 0.2
+        // accel-profile "flat"
+    }
+
+    // 取消注释后，鼠标会跳到新聚焦窗口中心。
+    // warp-mouse-to-focus
+
+    // 鼠标移入时自动聚焦窗口与输出。
+    // 设置 max-scroll-amount="0%" 仅对完全在屏幕内的窗口生效。
+    // focus-follows-mouse max-scroll-amount="0%"
+}
+
+// 影响窗口位置与尺寸的设置。
+layout {
+    // 设置窗口外边距（逻辑像素）。
+    gaps 8
+
+    // 切换焦点时是否居中列，选项：
+    // - "never"：默认行为，聚焦屏幕外列时保持在屏幕左/右边缘。
+    // - "always"：始终居中当前列。
+    // - "on-overflow"：当与前一个聚焦列无法同时完整显示时才居中。
+    center-focused-column "never"
+    // 默认半屏，通过 Mod+R 快捷键在 33%, 50%, 67%, 100% 之间切换
+    default-column-width { proportion 0.5; }
+    // 可自定义 "switch-preset-column-width"（Mod+R）在不同宽度间切换的预设值。
+    preset-column-widths {
+        // proportion 以输出宽度的比例设置列宽，并考虑 gaps。
+        // 例如 proportion 0.25 可在一个输出上正好放下四个窗口。
+        // 默认预设宽度为输出宽度的 1/3、1/2、2/3。
+        proportion 0.333333
+        proportion 0.500000
+        proportion 0.666667
+        proportion 1.000000
+
+        // fixed 以逻辑像素设置固定宽度。
+        // fixed 1920
+    }
+    // 若花括号留空，由窗口自身决定初始宽度。
+    // default-column-width {}
+
+    // 默认情况下，焦点环与边框作为实心背景矩形绘制在窗口后方，
+    // 因此会透过半透明窗口显示。
+    // 这是因为使用客户端装饰（CSD）的窗口形状可能是任意的。
+    //
+    // 如果不喜欢这样，可取消下面的 `prefer-no-csd`。
+    // Niri 会对同意省略客户端装饰的窗口在外围绘制焦点环与边框。
+    //
+    // 也可以用名为 `draw-border-with-background` 的窗口规则覆盖。
+
+    // 可以调整焦点环外观。
+    focus-ring {
+        width 4
+        active-gradient from="#88d6bbcc" to="#a8cbe2cc" angle=135
+        inactive-color "#505050"
+        urgent-color "#ffb4ab"
+    }
+
+    // 也可以添加边框，类似焦点环但始终可见。
+    border {
+        // 设置项与焦点环相同。
+        // 启用边框时通常应关闭焦点环。
+        off
+
+        width 4
+        active-color "#ffc87f"
+        inactive-color "#505050"
+
+        // 请求注意的窗口边框颜色。
+        urgent-color "#9b0000"
+
+        // 渐变可使用不同的插值色彩空间。
+        // 例如通过 in="oklch longer hue" 可实现柔和的彩虹渐变。
+        //
+        // active-gradient from="#e5989b" to="#ffb4a2" angle=45 relative-to="workspace-view" in="oklch longer hue"
+
+        // inactive-gradient from="#505050" to="#808080" angle=45 relative-to="workspace-view"
+    }
+
+    // struts 会缩小窗口可用区域，类似 layer-shell 面板。
+    // 可将其理解为外边距，单位为逻辑像素。
+    // 左/右 struts 会让相邻侧的下一个窗口始终可见。
+    // 上/下 struts 则会在 layer-shell 面板与常规 gaps 之外再增加外边距。
+    struts {
+        // left 64
+        // right 64
+        // top 64
+        // bottom 64
+    }
+
+    // 窗口阴影用于增强层次感
+    shadow {
+        softness 30
+        spread 5
+        offset x=0 y=5
+        color "#0007"
+    }
+}
+
+cursor {
+    // 设置光标主题与大小，并同时设置
+    // `XCURSOR_THEME` 与 `XCURSOR_SIZE` 环境变量。
+    // xcursor-theme "default"
+    // xcursor-size 24
+}
+
+hotkey-overlay {
+    // 取消注释以在启动时禁用“重要快捷键”弹窗。
+    skip-at-startup
+}
+
+// 取消注释后会请求客户端在可能时省略客户端装饰（CSD）。
+// 若客户端明确请求 CSD，将尊重该请求。
+// 同时会通知客户端处于平铺模式，去除部分客户端圆角。
+// 该选项还能修复某些半透明窗口下边框/焦点环绘制在后方的问题。
+// 启用或禁用后需重启应用才能生效。
+// prefer-no-csd
+
+// 由 niri 启动的应用环境变量
+// 注意：home.sessionVariables 也会设置这些，但在 KDL 中显式配置
+// 可确保对所有 niri 启动的进程生效
+environment {
+    NIXOS_OZONE_WL "1"
+    GTK_IM_MODULE "fcitx"
+    QT_IM_MODULE "fcitx"
+    XMODIFIERS "@im=fcitx"
+    SDL_IM_MODULE "fcitx"
+    INPUT_METHOD "fcitx"
+}
+
+// 可更改截图保存路径。
+// 路径开头的 ~ 会展开为主目录。
+// 路径可用 strftime(3) 格式化，以写入截图日期与时间。
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+// 也可设为 null 以禁用保存到磁盘。
+// screenshot-path null
+
+// 动画设置。
+// 维基说明了如何配置单项动画：
+animations {
+    slowdown 0.9
+    workspace-switch {
+        spring damping-ratio=0.82 stiffness=523 epsilon=0.0001
+    }
+    horizontal-view-movement {
+        spring damping-ratio=0.86 stiffness=423 epsilon=0.0001
+    }
+}
+
+// 最近窗口切换器（Alt+Tab）样式
+recent-windows {
+    highlight {
+        active-color "#343b38"
+        urgent-color "#ffb4ab"
+    }
+}

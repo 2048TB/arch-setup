@@ -1,0 +1,64 @@
+// 窗口规则用于调整单个窗口的行为。
+// 更多信息见维基：
+// https://yalter.github.io/niri/Configuration:-Window-Rules
+
+// 终端应用：在工作区 1 打开
+window-rule {
+    match app-id="com.mitchellh.ghostty"
+    open-on-workspace "1terminal"
+}
+
+// 浏览器：在工作区 2 打开
+window-rule {
+    match app-id="google-chrome"
+    open-on-workspace "2browser"
+}
+window-rule {
+    match app-id="chromium"
+    open-on-workspace "2browser"
+}
+window-rule {
+    // Chromium 可能使用的其他 app-id
+    match app-id="chromium-browser"
+    open-on-workspace "2browser"
+}
+
+// 聊天应用：在工作区 3 打开
+window-rule {
+    match title="^Telegram"
+    open-on-workspace "3chat"
+}
+
+// 游戏应用：在工作区 4 打开
+window-rule {
+    match app-id="steam"
+    open-on-workspace "4gaming"
+}
+window-rule {
+    match app-id="steam_app_default"
+    open-on-workspace "4gaming"
+}
+window-rule {
+    match app-id="net.lutris.Lutris"
+    open-on-workspace "4gaming"
+}
+window-rule {
+    match app-id="com.vysp3r.ProtonPlus"
+    open-on-workspace "4gaming"
+}
+window-rule {
+    // 所有 *.exe（通过 Wine 运行的 Windows 应用）
+    match app-id=".exe$"
+    open-on-workspace "4gaming"
+}
+
+// 文件管理应用：在工作区 6 打开
+window-rule {
+    match app-id="org.gnome.Nautilus"
+    open-on-workspace "6file"
+}
+window-rule {
+    // Zathura PDF 阅读器
+    match app-id="org.pwmt.zathura"
+    open-on-workspace "6file"
+}

@@ -1,0 +1,50 @@
+[Groups/0]
+# 组名称
+Name=Intl
+# 布局
+Default Layout=us
+# 默认输入法
+DefaultIM=keyboard-us-altgr-intl
+
+[Groups/0/Items/0]
+# 名称
+Name=keyboard-us
+# 布局
+Layout=
+
+[Groups/0/Items/1]
+# 名称
+Name=keyboard-us-intl
+# 布局
+Layout=
+
+[Groups/0/Items/2]
+# 名称
+Name=keyboard-us-altgr-intl
+# 布局
+Layout=
+
+[Groups/1]
+# 组名称
+Name=Default
+# 布局
+Default Layout=us
+# 默认输入法
+DefaultIM=pinyin
+
+[Groups/1/Items/0]
+# 名称
+Name=keyboard-us
+# 布局
+Layout=
+
+[Groups/1/Items/1]
+# 名称
+Name=pinyin
+# 布局
+Layout=
+
+[Groups/1/Items/2]
+[GroupOrder]
+0=Default
+1=Intl

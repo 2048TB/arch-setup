@@ -1,0 +1,20 @@
+// https://docs.noctalia.dev/getting-started/compositor-settings/niri/
+
+window-rule {
+  // 圆角边框，外观更现代。
+  geometry-corner-radius 20
+
+  // 将窗口内容裁剪到圆角边界内。
+  clip-to-geometry true
+}
+
+debug {
+  // 允许 Noctalia 触发通知动作与窗口激活。
+  honor-xdg-activation-with-invalid-serial
+}
+
+// 在背景层设置概览壁纸。
+layer-rule {
+  match namespace="^noctalia-overview*"
+  place-within-backdrop true
+}
