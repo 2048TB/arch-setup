@@ -21,17 +21,11 @@ add_to_path "$HOME/bin"
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 ############################################
-# NVM
-############################################
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-
-############################################
 # Go
 ############################################
-add_to_path "/usr/local/go/bin"
-[ -d "$HOME/go/bin" ] && add_to_path "$HOME/go/bin"
+export GOPATH="$HOME/.local/share/go"
+export GOBIN="$HOME/.local/share/go/bin"
+add_to_path "$GOBIN"
 
 ############################################
 # Bun
@@ -40,10 +34,19 @@ export BUN_INSTALL="$HOME/.bun"
 add_to_path "$BUN_INSTALL/bin"
 
 ############################################
-# .NET
+# Rust
 ############################################
-export DOTNET_ROOT="$HOME/.dotnet"
-[ -d "$HOME/.dotnet" ] && add_to_path "$HOME/.dotnet"
+export CARGO_HOME="$HOME/.cargo"
+export RUSTUP_HOME="$HOME/.rustup"
+add_to_path "$CARGO_HOME/bin"
+
+############################################
+# Node.js / pnpm / npm
+############################################
+export PNPM_HOME="$HOME/.local/share/pnpm"
+export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+add_to_path "$PNPM_HOME"
+add_to_path "$NPM_CONFIG_PREFIX/bin"
 
 ############################################
 # 其他环境文件

@@ -4,14 +4,13 @@
 
 # --- Repo Packages: 最小必装 ---
 # 注意：此清单为“增量补充”，核心包已内置于安装脚本中。
-7zip
+p7zip
 arj
 bat
 bind
 bluetui
 breeze
 btop
-bun
 cava
 docker
 docker-compose
@@ -38,7 +37,6 @@ lsof
 lzop
 man-db
 man-pages
-matugen
 net-tools
 ntfs-3g
 nwg-look
@@ -60,19 +58,15 @@ remmina
 rsync
 spice-gtk
 strace
-swaybg
-swayosd
 telegram-desktop
 tree
-unarchiver
+unar
 unrar
 unzip
 vdpauinfo
 virt-viewer
 waifu2x-ncnn-vulkan
-wlsunset
 xdg-utils
-xwayland-satellite
 zathura
 zip
 zstd
@@ -129,7 +123,6 @@ tokei
 typescript
 typescript-language-server
 universal-ctags
-uv
 yazi
 yq
 zellij
@@ -150,16 +143,17 @@ winetricks
 AUR:app2unit
 AUR:bbe
 AUR:ddcutil-service
+AUR:bun-bin
 AUR:google-chrome
 AUR:mullvad-vpn-bin
 AUR:nomacs
 AUR:nvitop
 AUR:splayer
+AUR:matugen
+AUR:xwayland-satellite
+AUR:uv
 AUR:ttf-lxgw-wenkai-screen
 AUR:vicinae-bin
-AUR:waybar-niri-taskbar-git
-AUR:waypaper
-AUR:wlogout
 AUR:wps-office
 
 # --- AUR Packages: 开发扩展 ---

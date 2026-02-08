@@ -49,7 +49,7 @@
           "enableScrollWheel": true,
           "followFocusedScreen": false,
           "groupedBorderOpacity": 1,
-          "hideUnoccupied": false,
+          "hideUnoccupied": true,
           "iconScale": 0.8,
           "id": "Workspace",
           "labelMode": "index",
@@ -74,25 +74,10 @@
           "usePrimaryColor": false
         },
         {
-          "compactMode": false,
-          "diskPath": "/persistent",
-          "id": "SystemMonitor",
-          "showCpuTemp": false,
-          "showCpuUsage": true,
-          "showDiskUsage": true,
-          "showGpuTemp": false,
-          "showLoadAverage": true,
-          "showMemoryAsPercent": true,
-          "showMemoryUsage": true,
-          "showNetworkStats": true,
-          "useMonospaceFont": true,
-          "usePrimaryColor": false
-        },
-        {
           "colorizeIcons": false,
           "hideMode": "hidden",
           "id": "ActiveWindow",
-          "maxWidth": 145,
+          "maxWidth": 120,
           "scrollingMode": "hover",
           "showIcon": true,
           "useFixedWidth": false
@@ -116,7 +101,7 @@
           "id": "ScreenRecorder"
         },
         {
-          "hideWhenZero": false,
+          "hideWhenZero": true,
           "id": "NotificationHistory",
           "showUnreadBadge": true
         },
@@ -271,19 +256,6 @@
             "usePrimaryColor": false,
             "x": 92,
             "y": 161
-          },
-          {
-            "hideMode": "visible",
-            "id": "MediaPlayer",
-            "roundedCorners": true,
-            "scale": 1.1501312913284876,
-            "showAlbumArt": true,
-            "showBackground": true,
-            "showButtons": true,
-            "showVisualizer": true,
-            "visualizerType": "linear",
-            "x": 92,
-            "y": 299
           },
           {
             "id": "Weather",

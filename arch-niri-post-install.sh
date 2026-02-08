@@ -17,7 +17,7 @@ LOCALE_MAIN="${LOCALE_MAIN:-}"
 LOCALE_EXTRA="${LOCALE_EXTRA:-}"
 TIME_ZONE="${TIME_ZONE:-}"
 KEYMAP="${KEYMAP:-}"
-GPU_PROFILE="${GPU_PROFILE:-auto}" # auto|1|2|3|4
+GPU_PROFILE="" # 1|2|3|4
 
 readonly WORK_DIR="/tmp/arch-niri-post-install"
 readonly REPO_LIST_FILE="${WORK_DIR}/repo-packages.txt"
@@ -77,21 +77,6 @@ prompt_install_user_if_empty() {
   done
 }
 
-ensure_pciutils_for_gpu_detection() {
-  if [[ "$GPU_PROFILE" != "auto" ]]; then
-    return 0
-  fi
-  if command -v lspci >/dev/null 2>&1; then
-    return 0
-  fi
-  warn "未找到 lspci，尝试安装 pciutils 以进行 GPU 检测..."
-  if pacman -S --noconfirm --needed pciutils >/dev/null 2>&1; then
-    log "已安装 pciutils。"
-  else
-    warn "pciutils 安装失败，GPU_PROFILE=auto 将回退为 1(无 GPU)。"
-  fi
-}
-
 validate_inputs() {
   is_valid_username "$INSTALL_USER" || {
     err "INSTALL_USER 非法：仅支持小写字母/数字/_/-，且不能以数字开头。"
@@ -101,36 +86,42 @@ validate_inputs() {
     err "INSTALL_USER 不存在，请先创建用户: $INSTALL_USER"
     exit 1
   }
-  [[ "$GPU_PROFILE" =~ ^(auto|1|2|3|4)$ ]] || {
-    err "GPU_PROFILE 仅支持 auto|1|2|3|4"
+  [[ "$GPU_PROFILE" =~ ^(1|2|3|4)$ ]] || {
+    err "GPU_PROFILE 仅支持 1|2|3|4"
     exit 1
   }
 }
 
-resolve_gpu_profile() {
-  local has_amd=0 has_nvidia=0 line
-
-  if [[ "$GPU_PROFILE" == "auto" ]]; then
-    if command -v lspci >/dev/null 2>&1; then
-      while IFS= read -r line; do
-        [[ -n "$line" ]] || continue
-        [[ "$line" == *amd* || "$line" == *advanced*micro*devices* || "$line" == *ati* ]] && has_amd=1
-        [[ "$line" == *nvidia* ]] && has_nvidia=1
-      done < <(lspci -nn | awk '/VGA compatible controller|3D controller|Display controller/ {print tolower($0)}')
-    else
-      warn "未找到 lspci，GPU_PROFILE=auto 将回退为 1(无 GPU)。"
-    fi
-    if [[ "$has_amd" == "1" && "$has_nvidia" == "1" ]]; then
-      GPU_PROFILE="4"
-    elif [[ "$has_amd" == "1" ]]; then
-      GPU_PROFILE="2"
-    elif [[ "$has_nvidia" == "1" ]]; then
-      GPU_PROFILE="3"
-    else
-      GPU_PROFILE="1"
-    fi
+prompt_gpu_profile() {
+  if [[ -n "$GPU_PROFILE" ]]; then
+    return 0
   fi
+  if ! is_tty; then
+    err "GPU_PROFILE 为空且非交互环境，无法提示输入。"
+    exit 1
+  fi
+  local input
+  while true; do
+    echo "选择 GPU 方案："
+    echo "1) 无 GPU"
+    echo "2) AMDGPU"
+    echo "3) NVIDIA"
+    echo "4) AMD 核显 + NVIDIA"
+    read -r -p "输入 1-4: " input
+    input="$(trim_space "$input")"
+    case "$input" in
+      1|2|3|4)
+        GPU_PROFILE="$input"
+        break
+        ;;
+      *)
+        warn "输入无效，请选择 1-4。"
+        ;;
+    esac
+  done
+}
 
+resolve_gpu_profile() {
   case "$GPU_PROFILE" in
     1) log "GPU 方案: 1) 无 GPU" ;;
     2) log "GPU 方案: 2) AMDGPU" ;;
@@ -269,11 +260,11 @@ build_package_lists() {
   }
 
   local -a core_repo=(
-    base-devel git niri ghostty
-    pciutils
+    base-devel git curl niri ghostty greetd greetd-tuigreet
     xdg-desktop-portal-gnome xdg-desktop-portal-gtk
-    fuzzel libnotify mako polkit-gnome
-    waybar wl-clipboard cliphist swayidle swaync swww
+    libnotify polkit-gnome
+    networkmanager upower power-profiles-daemon
+    wl-clipboard cliphist swayidle
     grim slurp wf-recorder hyprpicker satty
     brightnessctl playerctl pipewire pipewire-pulse wireplumber pavucontrol
     bluez bluez-utils
@@ -539,6 +530,51 @@ install_flatpak_packages() {
   fi
 }
 
+configure_greetd() {
+  log "配置 greetd (tuigreet -> niri)..."
+  mkdir -p /etc/greetd
+  cat >/etc/greetd/config.toml <<'EOF_GREETD'
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --cmd niri"
+user = "greeter"
+EOF_GREETD
+}
+
+enable_system_services() {
+  log "启用系统服务..."
+  local -a services=(
+    NetworkManager
+    bluetooth
+    upower
+    power-profiles-daemon
+    greetd
+    libvirtd
+  )
+  local svc
+  for svc in "${services[@]}"; do
+    if systemctl list-unit-files "${svc}.service" >/dev/null 2>&1; then
+      systemctl enable --now "${svc}.service" || warn "服务启用失败: ${svc}"
+    else
+      warn "未找到服务: ${svc}"
+    fi
+  done
+}
+
+configure_libvirt() {
+  log "配置 libvirt 权限..."
+  if ! getent group libvirt >/dev/null 2>&1; then
+    warn "未找到 libvirt 组，跳过用户加入。"
+    return 0
+  fi
+  if id -nG "$INSTALL_USER" | tr ' ' '\n' | grep -qx "libvirt"; then
+    return 0
+  fi
+  usermod -aG libvirt "$INSTALL_USER" || warn "添加用户到 libvirt 组失败: $INSTALL_USER"
+}
+
 deploy_dotfiles() {
   local home_dir
   home_dir="/home/${INSTALL_USER}"
@@ -554,19 +590,32 @@ deploy_dotfiles() {
   local src_noctalia="${ASSETS_CONFIG_DIR}/noctalia"
   local src_ghostty="${ASSETS_CONFIG_DIR}/ghostty"
   local src_fcitx5="${ASSETS_CONFIG_DIR}/fcitx5"
-  local src_shell="${ASSETS_CONFIG_DIR}/shell"
+  local src_shell_env="${ASSETS_CONFIG_DIR}/.config/shell/env"
+  local src_zshrc="${ASSETS_DIR}/configs/.zshrc"
+  local src_bashrc="${ASSETS_DIR}/configs/.bashrc"
+  local src_git="${ASSETS_CONFIG_DIR}/git"
+  local src_tmux="${ASSETS_CONFIG_DIR}/tmux"
+  local src_yazi="${ASSETS_CONFIG_DIR}/yazi"
+  local src_zellij="${ASSETS_CONFIG_DIR}/zellij"
   local src_wallpapers="${ASSETS_CONFIG_DIR}/wallpapers"
 
   [[ -d "$src_niri" ]] && cp -a "$src_niri" "$home_dir/.config/"
   [[ -d "$src_noctalia" ]] && cp -a "$src_noctalia" "$home_dir/.config/"
   [[ -d "$src_ghostty" ]] && cp -a "$src_ghostty" "$home_dir/.config/"
+  [[ -d "$src_git" ]] && cp -a "$src_git" "$home_dir/.config/"
+  [[ -d "$src_tmux" ]] && cp -a "$src_tmux" "$home_dir/.config/"
+  [[ -d "$src_yazi" ]] && cp -a "$src_yazi" "$home_dir/.config/"
+  [[ -d "$src_zellij" ]] && cp -a "$src_zellij" "$home_dir/.config/"
   if [[ -d "$src_fcitx5" ]]; then
     mkdir -p "$home_dir/.config/fcitx5"
     cp -a "${src_fcitx5}/." "$home_dir/.config/fcitx5/"
   fi
-  [[ -f "${src_shell}/zshrc" ]] && cp -a "${src_shell}/zshrc" "$home_dir/.zshrc"
-  [[ -f "${src_shell}/bashrc" ]] && cp -a "${src_shell}/bashrc" "$home_dir/.bashrc"
-  [[ -f "${src_shell}/vimrc" ]] && cp -a "${src_shell}/vimrc" "$home_dir/.vimrc"
+  if [[ -f "$src_shell_env" ]]; then
+    mkdir -p "$home_dir/.config/shell"
+    cp -a "$src_shell_env" "$home_dir/.config/shell/env"
+  fi
+  [[ -f "$src_zshrc" ]] && cp -a "$src_zshrc" "$home_dir/.zshrc"
+  [[ -f "$src_bashrc" ]] && cp -a "$src_bashrc" "$home_dir/.bashrc"
 
   mkdir -p \
     "$home_dir/Code/c-cpp" \
@@ -617,13 +666,16 @@ main() {
   require_cmd runuser
   prepare_resource_paths
   prompt_install_user_if_empty
+  prompt_gpu_profile
   validate_inputs
-  ensure_pciutils_for_gpu_detection
   resolve_gpu_profile
   build_package_lists
   install_repo_packages
   install_aur_packages
   install_flatpak_packages
+  configure_greetd
+  enable_system_services
+  configure_libvirt
   deploy_dotfiles
   final_summary
 }

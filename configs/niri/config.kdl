@@ -6,13 +6,7 @@ include "./keybindings.kdl"
 include "./windowrules.kdl"
 include "./noctalia-shell.kdl"
 
-// 命名工作区预定义（确保启动时顺序一致）
-workspace "1terminal"
-workspace "2browser"
-workspace "3chat"
-workspace "4music"
-workspace "5mail"
-workspace "6file"
+// 工作区不做预分类，默认使用动态工作区
 
 // 开机启动程序
 spawn-at-startup "noctalia-shell"
@@ -99,8 +93,8 @@ layout {
     }
 
     // 可以修改新窗口的默认宽度。
-    // 默认半屏，通过 Mod+R 快捷键在 33%, 50%, 67%, 100% 之间切换
-    default-column-width { proportion 0.5; }
+    // 默认全屏，通过 Mod+R 快捷键在 33%, 50%, 67%, 100% 之间切换
+    default-column-width { proportion 1.0; }
     // 若花括号留空，由窗口自身决定初始宽度。
     // default-column-width {}
 
@@ -176,7 +170,7 @@ hotkey-overlay {
 
 // 请求客户端省略客户端装饰（CSD），统一使用 server-side 边框。
 // 启用或禁用后需重启应用才能生效。
-prefer-no-csd
+// prefer-no-csd
 
 // 可更改截图保存路径。
 // 路径开头的 ~ 会展开为主目录。
