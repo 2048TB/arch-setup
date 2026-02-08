@@ -6,9 +6,16 @@ include "./keybindings.kdl"
 include "./windowrules.kdl"
 include "./noctalia-shell.kdl"
 
+// 命名工作区预定义（确保启动时顺序一致）
+workspace "1terminal"
+workspace "2browser"
+workspace "3chat"
+workspace "4music"
+workspace "5mail"
+workspace "6file"
+
 // 开机启动程序
 spawn-at-startup "noctalia-shell"
-spawn-at-startup "fcitx5" "-d"
 
 // 输入设备配置。
 input {
@@ -76,8 +83,7 @@ layout {
     // - "always"：始终居中当前列。
     // - "on-overflow"：当与前一个聚焦列无法同时完整显示时才居中。
     center-focused-column "never"
-    // 默认半屏，通过 Mod+R 快捷键在 33%, 50%, 67%, 100% 之间切换
-    default-column-width { proportion 0.5; }
+
     // 可自定义 "switch-preset-column-width"（Mod+R）在不同宽度间切换的预设值。
     preset-column-widths {
         // proportion 以输出宽度的比例设置列宽，并考虑 gaps。
@@ -91,6 +97,10 @@ layout {
         // fixed 以逻辑像素设置固定宽度。
         // fixed 1920
     }
+
+    // 可以修改新窗口的默认宽度。
+    // 默认半屏，通过 Mod+R 快捷键在 33%, 50%, 67%, 100% 之间切换
+    default-column-width { proportion 0.5; }
     // 若花括号留空，由窗口自身决定初始宽度。
     // default-column-width {}
 
@@ -164,24 +174,9 @@ hotkey-overlay {
     skip-at-startup
 }
 
-// 取消注释后会请求客户端在可能时省略客户端装饰（CSD）。
-// 若客户端明确请求 CSD，将尊重该请求。
-// 同时会通知客户端处于平铺模式，去除部分客户端圆角。
-// 该选项还能修复某些半透明窗口下边框/焦点环绘制在后方的问题。
+// 请求客户端省略客户端装饰（CSD），统一使用 server-side 边框。
 // 启用或禁用后需重启应用才能生效。
-// prefer-no-csd
-
-// 由 niri 启动的应用环境变量
-// 注意：home.sessionVariables 也会设置这些，但在 KDL 中显式配置
-// 可确保对所有 niri 启动的进程生效
-environment {
-    NIXOS_OZONE_WL "1"
-    GTK_IM_MODULE "fcitx"
-    QT_IM_MODULE "fcitx"
-    XMODIFIERS "@im=fcitx"
-    SDL_IM_MODULE "fcitx"
-    INPUT_METHOD "fcitx"
-}
+prefer-no-csd
 
 // 可更改截图保存路径。
 // 路径开头的 ~ 会展开为主目录。

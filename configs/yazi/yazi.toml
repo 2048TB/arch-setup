@@ -1,0 +1,60 @@
+[mgr]
+show_hidden = false
+sort_by = "natural"
+sort_dir_first = true
+sort_sensitive = false
+linemode = "size"
+scrolloff = 5
+mouse_events = [ "click", "scroll" ]
+title_format = "Yazi: {cwd}"
+
+[preview]
+max_width = 1920
+max_height = 1080
+tab_size = 2
+image_delay = 30
+
+[opener]
+text = [
+  { run = 'gnome-text-editor "$@"', orphan = true },
+]
+edit = [
+  { run = 'nvim "$@"', block = true },
+]
+image = [
+  { run = 'imv "$@"', orphan = true },
+]
+video = [
+  { run = 'mpv "$@"', orphan = true },
+]
+pdf = [
+  { run = 'zathura "$@"', orphan = true },
+]
+archive = [
+  { run = 'file-roller "$@"', orphan = true },
+]
+directory = [
+  { run = 'nautilus "$@"', orphan = true },
+]
+fallback = [
+  { run = 'xdg-open "$@"', orphan = true },
+]
+
+[open]
+rules = [
+  { mime = "text/*", use = "edit" },
+  { mime = "image/*", use = "image" },
+  { mime = "video/*", use = "video" },
+  { mime = "audio/*", use = "video" },
+  { mime = "application/pdf", use = "pdf" },
+  { mime = "application/zip", use = "archive" },
+  { mime = "application/gzip", use = "archive" },
+  { mime = "application/x-tar", use = "archive" },
+  { mime = "application/x-bzip2", use = "archive" },
+  { mime = "application/x-7z-compressed", use = "archive" },
+  { mime = "application/x-rar", use = "archive" },
+  { mime = "application/xz", use = "archive" },
+  { mime = "application/zstd", use = "archive" },
+  { mime = "inode/directory", use = "directory" },
+  { name = "*", use = "fallback" },
+]

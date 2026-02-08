@@ -11,7 +11,8 @@ binds {
 
     // 建议的程序启动快捷键：终端、应用启动器、锁屏。
     Mod+Return { spawn "ghostty"; }
-    Mod+Shift+Return { spawn "ghostty"; }
+    // 浮动终端（通过 --class 区分，由 windowrules 设为浮动）
+    Mod+Shift+Return { spawn "ghostty" "--class=ghostty-float"; }
 
     // 启动器
     Mod+D { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
@@ -96,11 +97,6 @@ binds {
     Mod+End  { focus-column-last; }
     Mod+Ctrl+Home { move-column-to-first; }
     Mod+Ctrl+End  { move-column-to-last; }
-    // 分体式键盘友好别名（避免 Home/End 层键）。
-    Mod+N { focus-column-first; }
-    Mod+M { focus-column-last; }
-    Mod+Ctrl+N { move-column-to-first; }
-    Mod+Ctrl+M { move-column-to-last; }
 
     Mod+Shift+Left  { focus-monitor-left; }
     Mod+Shift+Down  { focus-monitor-down; }
@@ -171,24 +167,18 @@ binds {
     // Mod+Ctrl+1 { move-window-to-workspace 1; }
 
     // 在当前与上一个工作区之间切换焦点。
-    // Mod+Tab { focus-workspace-previous; }
+    Mod+Tab { focus-workspace-previous; }
 
     // 以下绑定用于在列内/列外移动焦点窗口。
     // 如果窗口独立存在，将其并入旁边的列；
     // 若已在列内，则将其移出。
     Mod+BracketLeft  { consume-or-expel-window-left; }
     Mod+BracketRight { consume-or-expel-window-right; }
-    // 分体式键盘友好别名（避免依赖 []）。
-    Mod+Y { consume-or-expel-window-left; }
-    Mod+O { consume-or-expel-window-right; }
 
     // 从右侧列吸入一个窗口到当前列底部。
     Mod+Comma  { consume-window-into-column; }
     // 将当前列底部窗口移到右侧。
     Mod+Period { expel-window-from-column; }
-    // 分体式键盘友好别名（避免依赖 , .）。
-    Mod+Shift+Y { consume-window-into-column; }
-    Mod+Shift+O { expel-window-from-column; }
 
     Mod+R { switch-preset-column-width; }
     // 也可按反向顺序循环预设。
@@ -215,18 +205,16 @@ binds {
     // set-column-width "100" 会让列占用 200 物理像素。
     Mod+Minus { set-column-width "-10%"; }
     Mod+Equal { set-column-width "+10%"; }
-    // 分体式键盘友好别名（避免依赖 +/- 层键）。
-    Mod+Alt+H { set-column-width "-10%"; }
-    Mod+Alt+L { set-column-width "+10%"; }
 
     // 与其他窗口同列时的更精细高度调整。
     Mod+Shift+Minus { set-window-height "-10%"; }
     Mod+Shift+Equal { set-window-height "+10%"; }
-    Mod+Alt+J { set-window-height "-10%"; }
-    Mod+Alt+K { set-window-height "+10%"; }
 
     // 在浮动与平铺布局间切换当前窗口。
     Mod+V       { toggle-window-floating; }
+
+    // 在浮动窗口与平铺窗口之间切换焦点。
+    Mod+G       { switch-focus-between-floating-and-tiling; }
 
     // 切换列的标签页显示模式。
     // 该列窗口将以纵向标签显示，
@@ -240,6 +228,7 @@ binds {
     // Mod+Shift+Space { switch-layout "prev"; }
 
     Print { screenshot; }
+    Mod+A { spawn "sh" "-c" "path=\"$XDG_SCREENSHOTS_DIR/Screenshot from $(date '+%Y-%m-%d %H-%M-%S').png\"; grim -g \"$(slurp)\" - | tee \"$path\" | wl-copy --type image/png"; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
 

@@ -1,25 +1,20 @@
 # Unified software list for Arch ISO installer
 # Classification: Repo / AUR / Flatpak
-# Format: plain package for repo, AUR:<name>, flatpak:<id>
+# Format: plain package for repo, repo:<name>, aur:<name>, flatpak:<id> (prefix大小写不敏感，可带空格)
 
 # --- Repo Packages: 最小必装 ---
+# 注意：此清单为“增量补充”，核心包已内置于安装脚本中。
 7zip
 arj
 bat
 bind
 bluetui
-bluez
-bluez-utils
 breeze
-brightnessctl
 btop
 bun
 cava
-cliphist
-curl
 docker
 docker-compose
-dosfstools
 duf
 dust
 exfatprogs
@@ -32,9 +27,7 @@ gettext
 gnome-software
 gnome-text-editor
 gnupg
-grim
 hyprlock
-hyprpicker
 imv
 inetutils
 lazydocker
@@ -55,19 +48,20 @@ plocate
 procs
 pulsemixer
 qemu-full
-qt5ct
-qt6ct
+libvirt
+virt-manager
+virt-install
+dnsmasq
+bridge-utils
+edk2-ovmf
+swtpm
+vde2
 remmina
 rsync
-satty
-slurp
 spice-gtk
 strace
 swaybg
-swayidle
-swaync
 swayosd
-swww
 telegram-desktop
 tree
 unarchiver
@@ -76,13 +70,7 @@ unzip
 vdpauinfo
 virt-viewer
 waifu2x-ncnn-vulkan
-waybar
-wf-recorder
-wget
-wl-clipboard
 wlsunset
-udisks2
-xdg-user-dirs
 xdg-utils
 xwayland-satellite
 zathura
@@ -94,11 +82,13 @@ autoconf
 automake
 ccache
 clang
+clang-tools-extra
 cmake
 delve
 direnv
 dive
 fzf
+gdb
 github-cli
 git-delta
 git-lfs
@@ -108,6 +98,10 @@ go-tools
 gopls
 jq
 just
+hyperfine
+lld
+lldb
+llvm
 libtool
 make
 meson
@@ -134,8 +128,10 @@ tmux
 tokei
 typescript
 typescript-language-server
+universal-ctags
 uv
 yazi
+yq
 zellij
 zig
 zls

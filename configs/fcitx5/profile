@@ -4,7 +4,7 @@ Name=Intl
 # 布局
 Default Layout=us
 # 默认输入法
-DefaultIM=keyboard-us-altgr-intl
+DefaultIM=pinyin
 
 [Groups/0/Items/0]
 # 名称
@@ -21,6 +21,12 @@ Layout=
 [Groups/0/Items/2]
 # 名称
 Name=keyboard-us-altgr-intl
+# 布局
+Layout=
+
+[Groups/0/Items/3]
+# 名称
+Name=pinyin
 # 布局
 Layout=
 
@@ -44,7 +50,6 @@ Name=pinyin
 # 布局
 Layout=
 
-[Groups/1/Items/2]
 [GroupOrder]
 0=Default
 1=Intl

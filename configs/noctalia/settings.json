@@ -20,7 +20,7 @@
   },
   "audio": {
     "cavaFrameRate": 30,
-    "externalMixer": "pwvucontrol || pavucontrol",
+    "externalMixer": "pavucontrol",
     "mprisBlacklist": [],
     "preferredPlayer": "",
     "visualizerType": "linear",
@@ -317,7 +317,7 @@
     "allowPanelsOnScreenWithoutBar": true,
     "animationDisabled": false,
     "animationSpeed": 1,
-    "avatarImage": "~/nix-config/_img/myself.jpg",
+    "avatarImage": "",
     "boxRadiusRatio": 1,
     "compactLockScreen": false,
     "dimmerOpacity": 0.2,
@@ -366,10 +366,10 @@
     "wifiEnabled": true
   },
   "nightLight": {
-    "autoSchedule": true,
+    "autoSchedule": false,
     "dayTemp": "6500",
-    "enabled": true,
-    "forced": true,
+    "enabled": false,
+    "forced": false,
     "manualSunrise": "06:30",
     "manualSunset": "18:30",
     "nightTemp": "4000"

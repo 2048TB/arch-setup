@@ -8,6 +8,12 @@ window-rule {
     open-on-workspace "1terminal"
 }
 
+// 浮动终端（Mod+Shift+Enter 启动，class=ghostty-float）
+window-rule {
+    match app-id="ghostty-float"
+    open-floating true
+}
+
 // 浏览器：在工作区 2 打开
 window-rule {
     match app-id="google-chrome"
@@ -25,7 +31,7 @@ window-rule {
 
 // 聊天应用：在工作区 3 打开
 window-rule {
-    match title="^Telegram"
+    match app-id="^org\\.telegram\\.desktop$"
     open-on-workspace "3chat"
 }
 
@@ -52,6 +58,26 @@ window-rule {
     open-on-workspace "4gaming"
 }
 
+// 音乐应用：在工作区 4 打开
+window-rule {
+    match app-id="^org\\.gnome\\.Decibels$"
+    open-on-workspace "4music"
+}
+window-rule {
+    match app-id="spotify"
+    open-on-workspace "4music"
+}
+
+// 邮件应用：在工作区 5 打开
+window-rule {
+    match app-id="^org\\.gnome\\.Geary$"
+    open-on-workspace "5mail"
+}
+window-rule {
+    match app-id="thunderbird"
+    open-on-workspace "5mail"
+}
+
 // 文件管理应用：在工作区 6 打开
 window-rule {
     match app-id="org.gnome.Nautilus"
@@ -61,4 +87,26 @@ window-rule {
     // Zathura PDF 阅读器
     match app-id="org.pwmt.zathura"
     open-on-workspace "6file"
+}
+
+// 浮动窗口规则：对话框/查看器类应用默认浮动
+window-rule {
+    match app-id="org.gnome.FileRoller"
+    open-floating true
+}
+window-rule {
+    match app-id="imv"
+    open-floating true
+}
+window-rule {
+    match app-id="nomacs"
+    open-floating true
+}
+window-rule {
+    match app-id="pavucontrol"
+    open-floating true
+}
+window-rule {
+    match app-id="nm-connection-editor"
+    open-floating true
 }
